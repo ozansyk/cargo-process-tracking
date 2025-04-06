@@ -1,0 +1,74 @@
+@startuml KargoTakip_GenelUseCase
+left to right direction
+
+actor "Personel" as Employee
+actor "Müşteri" as Customer
+actor "Yönetici" as Admin
+
+rectangle "Kargo Takip Sistemi" {
+  usecase "Kimlik Doğrula (Login/Logout)" as UC_Auth
+  usecase "Kargo Kaydet" as UC_Register
+  usecase "Kargo Ara ve Görüntüle" as UC_Search
+  usecase "Kargo Durumu Güncelle" as UC_UpdateStatus
+  usecase "Kargo Takip Et" as UC_Track
+  usecase "Kullanıcı Hesaplarını Yönet" as UC_ManageUsers
+
+  ' Sistem tarafından tetiklenen önemli arka plan işlevleri
+  usecase "İş Akışını Yönet (JBPM)" as UC_ManageWorkflow <<System>>
+  usecase "Bildirim Gönder (Async)" as UC_SendNotification <<System>>
+}
+
+' Aktör - Use Case İlişkileri
+Employee -- UC_Auth
+Employee -- UC_Register
+Employee -- UC_Search
+Employee -- UC_UpdateStatus
+
+Customer -- UC_Track
+
+Admin -- UC_Auth
+Admin -- UC_ManageUsers
+Admin -- UC_Search
+
+
+' Use Case'ler Arası Tetiklemeler / İlişkiler
+UC_Register ..> UC_ManageWorkflow : <<initiates>>
+UC_UpdateStatus ..> UC_ManageWorkflow : <<triggers>>
+UC_UpdateStatus ..> UC_SendNotification : <<triggers>>
+' (Opsiyonel: Kayıtta da bildirim gidebilir)
+' UC_Register ..> UC_SendNotification : <<triggers>>
+
+
+' Notlar
+note right of UC_Track
+  Müşteri tarafından,
+  giriş yapmadan
+  takip numarası ile kullanılır.
+end note
+
+note top of UC_ManageUsers
+  Yönetici; personel
+  oluşturur, günceller,
+  siler, yetkilendirir.
+end note
+
+note bottom of UC_UpdateStatus
+  Personel, JBPM sürecindeki
+  izin verilen adımlarla
+  (Teslim, İade, İptal vb.)
+  kargo durumunu günceller.
+end note
+
+note right of UC_ManageWorkflow
+  Sistem, JBPM aracılığıyla
+  tanımlı iş akışlarını
+  yürütür ve yönetir.
+end note
+
+note right of UC_SendNotification
+  Sistem, önemli durum
+  değişikliklerinde RabbitMQ
+  üzerinden bildirim tetikler.
+end note
+
+@enduml

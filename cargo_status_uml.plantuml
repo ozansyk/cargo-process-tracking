@@ -1,0 +1,97 @@
+@startuml KargoDurumGuncelleme_UseCase
+left to right direction
+
+actor "Personel" as Employee
+actor "Yönetici" as Admin
+
+rectangle "Kargo Takip Sistemi - Durum Yönetimi" {
+  ' Ana tetikleyici görev (Teslimatçı veya operasyon personeli yapar)
+  usecase "Teslimat Girişimini Kaydet" as UC_RecordAttempt
+    note right
+     Kargonun teslim edilip
+     edilemediğini, yeniden
+     zamanlanıp zamanlanmayacağını
+     veya iade edilip edilmeyeceğini
+     belirler (task_attempt_delivery).
+    end note
+
+  ' Başarılı Teslimat Senaryosu
+  usecase "Başarılı Teslimatı Onayla" as UC_ConfirmDelivery
+    note bottom
+     Teslim alan bilgisi gibi
+     detaylar girilir
+     (task_confirm_delivery).
+    end note
+
+  ' Başarısız Teslimat -> Yeniden Zamanlama Senaryosu
+  usecase "Yeniden Zamanlama Bilgisi Topla" as UC_Reschedule
+     note bottom
+     Yeni tarih/saat veya
+     neden bilgisi alınır
+     (task_reschedule).
+     end note
+
+  ' Başarısız Teslimat -> İade Senaryosu
+  usecase "İade Sürecini Başlat/İşle" as UC_HandleReturn
+     note right
+     İade alt sürecini tetikler
+     veya ilgili iade adımlarını
+     işler (callActivity_return_process).
+    end note
+
+  ' İptal Senaryosu (Ayrı bir akış olarak tetiklenir)
+   usecase "İptal İşlemini Onayla" as UC_ConfirmCancel
+     note top
+     Gelen iptal sinyali sonrası
+     onaylama veya neden girme
+     (task_confirm_cancellation).
+     end note
+   usecase "Kargo İptal Sinyali Gönder" as UC_SendCancelSignal
+     note bottom
+     Yönetici veya yetkili
+     personel, süreci iptal etmek
+     için sinyal gönderir.
+     end note
+
+  ' Sistem Use Cases (Arka Plan)
+  usecase "İş Akışını Yönet (JBPM)" as UC_ManageWorkflow <<System>>
+  usecase "Bildirim Gönder (Async)" as UC_SendNotification <<System>>
+
+}
+
+' Aktör Etkileşimleri
+Employee -- UC_RecordAttempt
+Employee -- UC_ConfirmDelivery
+Employee -- UC_Reschedule
+Employee -- UC_HandleReturn
+Employee -- UC_ConfirmCancel
+
+' Yönetici İptal Başlatabilir
+Admin -- UC_SendCancelSignal
+' (Alternatif: Personel de iptal başlatabilir)
+' Employee -- UC_SendCancelSignal
+
+' İlişkiler ve Tetiklemeler
+UC_RecordAttempt ..> UC_ConfirmDelivery : <<includes>>\n(Başarılı ise)
+UC_RecordAttempt ..> UC_Reschedule : <<includes>>\n(Yeniden Zamanlama ise)
+UC_RecordAttempt ..> UC_HandleReturn : <<includes>>\n(İade ise)
+
+' Tüm bu görevler iş akışını ilerletir
+UC_ConfirmDelivery ..> UC_ManageWorkflow : <<triggers>>
+UC_Reschedule ..> UC_ManageWorkflow : <<triggers>>
+UC_HandleReturn ..> UC_ManageWorkflow : <<triggers>>
+UC_ConfirmCancel ..> UC_ManageWorkflow : <<triggers>>
+
+' İptal sinyali, onaylama görevini içeren alt süreci başlatır
+UC_SendCancelSignal ..> UC_ManageWorkflow : <<sends signal>>
+UC_ManageWorkflow ..> UC_ConfirmCancel : <<initiates task>> ' (within event sub-process)
+
+
+' Önemli durum değişiklikleri bildirim gönderir
+UC_ConfirmDelivery ..> UC_SendNotification : <<triggers>>
+UC_Reschedule ..> UC_SendNotification : <<triggers>>
+UC_HandleReturn ..> UC_SendNotification : <<triggers>>
+UC_ConfirmCancel ..> UC_SendNotification : <<triggers>>
+
+
+@enduml
