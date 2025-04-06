@@ -107,8 +107,8 @@
 		</dependency>
 		<dependency>
 			<groupId>org.kie</groupId>
-			<artifactId>jbpm-spring-boot-starter</artifactId>
-			<version>7.59.0.Final</version>
+			<artifactId>kie-server-spring-boot-starter-jbpm</artifactId>
+			<version>7.74.1.Final</version>
 		</dependency>
 	</dependencies>
 	<dependencyManagement>
