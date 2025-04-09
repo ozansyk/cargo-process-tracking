@@ -1,3 +1,6 @@
+server:
+  port: 8080
+
 spring:
   application:
     name=: cargo-process-tracking
@@ -13,12 +16,15 @@ spring:
     properties:
       hibernate:
         dialect: org.hibernate.dialect.PostgreSQLDialect
+        format_sql: true
   thymeleaf:
     cache: false
     enabled: true
     prefix: classpath:/templates/
     suffix: .html
     mode: HTML5
+  messages:
+    basename: messages
   security:
     user:
       name: admin
@@ -35,3 +41,7 @@ spring:
           auth: true
           starttls:
             enable: true
+
+flowable:
+  check-process-definitions: true
+  database-schema-update: true

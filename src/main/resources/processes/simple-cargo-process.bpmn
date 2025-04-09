@@ -1,0 +1,71 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<definitions xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL"
+             xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+             xmlns:flowable="http://flowable.org/bpmn"
+             xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI"
+             xmlns:omgdc="http://www.omg.org/spec/DD/20100524/DC"
+             xmlns:omgdi="http://www.omg.org/spec/DD/20100524/DI"
+             targetNamespace="http://www.example.org/SimpleCargoTracking">
+
+    <process id="simpleCargoProcess" name="Simple Cargo Received Process" isExecutable="true">
+
+        <startEvent id="startEvent" name="Cargo Received Event"/>
+
+        <sequenceFlow id="flow1" sourceRef="startEvent" targetRef="persistReceivedTask"/>
+
+        <serviceTask id="persistReceivedTask" name="Persist Status RECEIVED"
+                     flowable:delegateExpression="#{persistStatusWorker}">
+        </serviceTask>
+
+        <sequenceFlow id="flow2" sourceRef="persistReceivedTask" targetRef="endEvent"/>
+
+        <endEvent id="endEvent" name="Process Ended"/>
+
+    </process>
+
+    <!-- *** GÖRSEL BİLGİLER (Diagram Interchange - DI) *** -->
+    <bpmndi:BPMNDiagram id="BPMNDiagram_simpleCargoProcess">
+        <bpmndi:BPMNPlane id="BPMNPlane_simpleCargoProcess" bpmnElement="simpleCargoProcess">
+            <!-- Start Event Şekli -->
+            <bpmndi:BPMNShape id="BPMNShape_startEvent" bpmnElement="startEvent">
+                <omgdc:Bounds x="100" y="100" width="36" height="36"/>
+                <!-- İsteğe bağlı: Etiket (isim) konumu
+                <bpmndi:BPMNLabel>
+                    <omgdc:Bounds x="80" y="140" width="76" height="28"/>
+                </bpmndi:BPMNLabel>
+                -->
+            </bpmndi:BPMNShape>
+
+            <!-- Service Task Şekli -->
+            <bpmndi:BPMNShape id="BPMNShape_persistReceivedTask" bpmnElement="persistReceivedTask">
+                <omgdc:Bounds x="200" y="78" width="100" height="80"/>
+                <!-- İsteğe bağlı: Etiket (isim) konumu
+                <bpmndi:BPMNLabel/>
+                 -->
+            </bpmndi:BPMNShape>
+
+            <!-- End Event Şekli -->
+            <bpmndi:BPMNShape id="BPMNShape_endEvent" bpmnElement="endEvent">
+                <omgdc:Bounds x="360" y="100" width="36" height="36"/>
+                <!-- İsteğe bağlı: Etiket (isim) konumu
+                <bpmndi:BPMNLabel>
+                   <omgdc:Bounds x="343" y="140" width="70" height="14"/>
+               </bpmndi:BPMNLabel>
+                -->
+            </bpmndi:BPMNShape>
+
+            <!-- Sequence Flow 1 Oku (startEvent -> persistReceivedTask) -->
+            <bpmndi:BPMNEdge id="BPMNEdge_flow1" bpmnElement="flow1">
+                <omgdi:waypoint x="136" y="118"/> <!-- startEvent çıkış (sağ orta) -->
+                <omgdi:waypoint x="200" y="118"/> <!-- persistReceivedTask giriş (sol orta) -->
+            </bpmndi:BPMNEdge>
+
+            <!-- Sequence Flow 2 Oku (persistReceivedTask -> endEvent) -->
+            <bpmndi:BPMNEdge id="BPMNEdge_flow2" bpmnElement="flow2">
+                <omgdi:waypoint x="300" y="118"/> <!-- persistReceivedTask çıkış (sağ orta) -->
+                <omgdi:waypoint x="360" y="118"/> <!-- endEvent giriş (sol orta) -->
+            </bpmndi:BPMNEdge>
+        </bpmndi:BPMNPlane>
+    </bpmndi:BPMNDiagram>
+
+</definitions>

@@ -26,12 +26,13 @@ public class SecurityConfig {
         this.userDetailsService = userDetailsService;
     }
 
+
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http, UserRepository userRepository) throws Exception {
         http
                 .csrf().disable()
                 .authorizeHttpRequests()
-                .requestMatchers("/register", "/login", "/verify", "/api/cargo-details",
+                .requestMatchers("/", "/register", "/login", "/index", "/api/cargos", //TODO /api/cargos kaldırılacak
                         "/images/**", "/css/**", "/js/**").permitAll()
                 .anyRequest().authenticated()
                 .and()
@@ -41,20 +42,19 @@ public class SecurityConfig {
                 .failureHandler((request, response, exception) -> {
                     String email = request.getParameter("email");
                     Optional<UserEntity> user = userRepository.findByEmail(email);
+                    String encodedErrorMessage = "Hata!";
                     if (user.isPresent() && !user.get().getIsEnabled()) {
                         // Kullanıcı aktif değilse özel hata mesajı
-                        String errorMessage = "Hesabınız aktifleştirilmedi. Lütfen e-posta adresinizi(Spama düşmüş olabilir) kontrol edin.";
-                        // Kullanıcıyı verify sayfasına yönlendir ve hata mesajını parametre olarak gönder
-                        response.sendRedirect("/verify?error=" + URLEncoder.encode(errorMessage, StandardCharsets.UTF_8) + "&email=" + request.getParameter("username"));
+                        String errorMessage = "Hesabınız pasif durumda. Lütfen admin ile iletişime geciniz.";
+                        encodedErrorMessage = URLEncoder.encode(errorMessage, StandardCharsets.UTF_8);
                     } else if (exception.getMessage().equalsIgnoreCase("Bad credentials")) {
                         String errorMessage = "Kullanıcı adı veya şifre yanlış.";
-                        String encodedErrorMessage = URLEncoder.encode(errorMessage, StandardCharsets.UTF_8);
-                        response.sendRedirect("/login?error=" + encodedErrorMessage);  // URL'e encode edilmiş hata mesajı ekleyerek yönlendirme
+                        encodedErrorMessage = URLEncoder.encode(errorMessage, StandardCharsets.UTF_8);
                     } else {
                         String errorMessage = "Giriş sırasında bir hata oluştu.";
-                        String encodedErrorMessage = URLEncoder.encode(errorMessage, StandardCharsets.UTF_8);
-                        response.sendRedirect("/login?error=" + encodedErrorMessage);
+                        encodedErrorMessage = URLEncoder.encode(errorMessage, StandardCharsets.UTF_8);
                     }
+                    response.sendRedirect("/login?error=" + encodedErrorMessage);
                 })
                 .permitAll()
                 .and()
@@ -67,6 +67,7 @@ public class SecurityConfig {
 
         return http.build();
     }
+
 
     @Bean
     public PasswordEncoder passwordEncoder() {

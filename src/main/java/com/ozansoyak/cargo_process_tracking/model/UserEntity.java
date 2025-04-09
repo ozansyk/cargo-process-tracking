@@ -4,8 +4,6 @@ import com.ozansoyak.cargo_process_tracking.model.enums.UserType;
 import jakarta.persistence.*;
 import lombok.*;
 
-import java.time.LocalDate;
-
 @Entity
 @Table(name = "users")
 @Getter
@@ -23,6 +21,6 @@ public class UserEntity extends AbstractEntity {
     @Enumerated(EnumType.STRING)
     private UserType userType;
 
-    private Boolean isEnabled = false;
+    private Boolean isEnabled = true;
 
 }
