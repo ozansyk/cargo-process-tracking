@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <title>Flowable Süreç Monitörü (Görsel - Doğrulamalı)</title> <!-- Başlığı güncelledim -->
+    <style>
+        /* Önceki stiller aynı kalabilir */
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; margin: 20px; background-color: #f4f7f9; }
+        .container { max-width: 1050px; /* Genişliği biraz artırdım */ margin: auto; }
+        .start-form { margin-bottom: 25px; padding: 20px; border: 1px solid #e0e0e0; background-color: #fff; box-shadow: 0 1px 4px rgba(0,0,0,0.06); border-radius: 5px; }
+        .start-form label { margin-right: 10px;}
+        .start-form input[type=text] { padding: 6px 8px; margin-right: 10px; border: 1px solid #ccc; border-radius: 3px;}
+        .start-form button { padding: 8px 15px; cursor: pointer; background-color: #007bff; color: white; border: none; border-radius: 3px; }
+        .start-form button:hover { background-color: #0056b3; }
+        .no-data { color: #777; font-style: italic; margin-bottom: 15px; padding: 10px; background-color: #fff; border: 1px solid #e0e0e0; border-radius: 5px; text-align: center; }
+        .process-instance { border: 1px solid #d1d9e0; padding: 15px 20px; margin-bottom: 20px; border-radius: 8px; background-color: #ffffff; box-shadow: 0 3px 8px rgba(0,0,0,0.08); overflow: hidden; }
+        .process-header { font-weight: 600; margin-bottom: 18px; border-bottom: 1px solid #e5e5e5; padding-bottom: 10px; color: #2c3e50; font-size: 1em; display: flex; justify-content: space-between; align-items: center; }
+        .instance-id { font-family: monospace; color: #3498db; font-size: 0.9em; }
+        .instance-time { color: #555; font-size: 0.85em; }
+        .process-flow { display: flex; align-items: center; justify-content: flex-start; gap: 8px; padding: 20px 15px; background-color: #f8f9fa; border-radius: 5px; min-height: 65px; overflow-x: auto; }
+        .flow-element { border: 2px solid #34495e; background-color: #ffffff; color: #34495e; padding: 6px 12px; border-radius: 8px; text-align: center; font-size: 0.8em; font-weight: 500; min-width: 85px; transition: all 0.2s ease-out; flex-shrink: 0; box-sizing: border-box; }
+        .event-circle { width: 48px; height: 48px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 600; padding: 0; min-width: 48px; }
+        .event-circle.end-event { border-width: 3px; }
+        .event-circle span { font-size: 1em; }
+        .task-rect { min-width: 100px; padding: 10px 15px; }
+        .arrow { color: #34495e; font-size: 1.8em; font-weight: bold; padding: 0 6px; transition: color 0.2s ease-out; flex-shrink: 0; }
+        .state-completed { border-color: #adb5bd !important; background-color: #f8f9fa !important; color: #6c757d !important; box-shadow: none !important; transform: none !important; }
+        .state-completed.event-circle.end-event { border-width: 3px !important; }
+        .state-active { border-color: #2ecc71 !important; border-width: 3px !important; background-color: #eafaf1 !important; color: #27ae60 !important; font-weight: 600 !important; box-shadow: 0 0 12px rgba(46, 204, 113, 0.4) !important; }
+        .arrow-completed { color: #adb5bd !important; }
+
+        /* Yeni görev için ek bilgi (opsiyonel) */
+        .task-info { font-size: 0.75em; color: #888; margin-top: 4px; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>Kargo Süreç Takibi Monitörü (Doğrulamalı)</h1>
+
+    <!-- Yeni Süreç Başlatma Formu (Aynı kalabilir) -->
+    <div class="start-form">
+        <h2>Yeni Kargo Süreci Başlat</h2>
+        <!-- Form action ve method'unuzu kendi Controller'ınıza göre ayarlayın -->
+        <form th:action="@{/monitor/start}" method="post">
+            <label for="trackingNumber">Takip Numarası (Opsiyonel Business Key):</label>
+            <input type="text" id="trackingNumber" name="trackingNumber" placeholder="Örn: TK-12345"/>
+            <!-- Process Definition Key'i gizli alan olarak eklemek iyi olabilir -->
+            <input type="hidden" name="processDefinitionKey" value="cargoProcessingWithValidation" />
+            <button type="submit">Süreci Başlat</button>
+        </form>
+    </div>
+
+    <!-- Aktif Süreçler Bölümü -->
+    <!-- Controller'dan gelen değişken adları activeInstances, completedActivityMap, activeActivityMap varsayılıyor -->
+    <h2>Aktif Süreçler (<span th:text="${#lists.size(activeInstances)}">0</span>)</h2>
+    <div th:if="${#lists.isEmpty(activeInstances)}" class="no-data">
+        Aktif süreç bulunmamaktadır.
+    </div>
+    <div th:unless="${#lists.isEmpty(activeInstances)}">
+        <!-- Process Instance ID'sini instance.id veya instance.processInstanceId olarak alın (Controller'a bağlı) -->
+        <div th:each="instance : ${activeInstances}" class="process-instance">
+            <div class="process-header">
+                <span>Instance ID: <span class="instance-id" th:text="${instance.id}">proc-id-123</span></span>
+                <span class="instance-time">Başlama: <span th:text="${instance.startTime != null ? #dates.format(instance.startTime, 'dd.MM.yyyy HH:mm') : 'N/A'}">...</span></span>
+            </div>
+            <div class="process-flow">
+                <!-- 1. Start Event -->
+                <div class="flow-element event-circle" title="startEvent"
+                     th:classappend="${completedActivityMap[instance.id]?.contains('startEvent')} ? 'state-completed' : ''">
+                    <span>S</span>
+                </div>
+                <!-- Ok 1 -> 2 -->
+                <span class="arrow"
+                      th:classappend="${completedActivityMap[instance.id]?.contains('startEvent') and completedActivityMap[instance.id]?.contains('persistReceivedTask')} ? 'arrow-completed' : ''">→</span>
+                <!-- 2. Persist Task -->
+                <div class="flow-element task-rect" title="persistReceivedTask"
+                     th:classappend="${activeActivityMap[instance.id] == 'persistReceivedTask'} ? 'state-active' : (${completedActivityMap[instance.id]?.contains('persistReceivedTask')} ? 'state-completed' : '')">
+                    <span>Kayıt</span>
+                    <div class="task-info">(Service Task)</div>
+                </div>
+                <!-- Ok 2 -> 3 -->
+                <!-- Bu okun tamamlanması için hem persist hem de validate task'ının bitmesi gerekir -->
+                <span class="arrow"
+                      th:classappend="${completedActivityMap[instance.id]?.contains('persistReceivedTask') and completedActivityMap[instance.id]?.contains('validateCargoTask')} ? 'arrow-completed' : ''">→</span>
+                <!-- 3. YENİ Validate Task (User Task) -->
+                <div class="flow-element task-rect" title="validateCargoTask"
+                     th:classappend="${activeActivityMap[instance.id] == 'validateCargoTask'} ? 'state-active' : (${completedActivityMap[instance.id]?.contains('validateCargoTask')} ? 'state-completed' : '')">
+                    <span>Doğrulama</span>
+                    <div class="task-info">(User Task)</div>
+                </div>
+                <!-- Ok 3 -> 4 -->
+                <!-- Bu okun tamamlanması için hem validate task'ının hem de end event'in bitmesi gerekir -->
+                <span class="arrow"
+                      th:classappend="${completedActivityMap[instance.id]?.contains('validateCargoTask') and completedActivityMap[instance.id]?.contains('endEvent')} ? 'arrow-completed' : ''">→</span>
+                <!-- 4. End Event -->
+                <div class="flow-element event-circle end-event" title="endEvent"
+                     th:classappend="${activeActivityMap[instance.id] == 'endEvent'} ? 'state-active' : (${completedActivityMap[instance.id]?.contains('endEvent')} ? 'state-completed' : '')">
+                    <span>E</span>
+                </div>
+            </div>
+            <!-- Opsiyonel: Aktif görevi tamamlama butonu (Basit test için) -->
+            <div th:if="${activeActivityMap[instance.id] == 'validateCargoTask'}" style="margin-top: 15px;">
+                <form th:action="@{/monitor/completeTask}" method="post" style="display: inline-block;">
+                    <!-- Controller'dan task Id'sini almanız gerekecek -->
+                    <!-- <input type="hidden" name="taskId" th:value="${activeTaskIdMap[instance.id]}" /> -->
+                    <input type="hidden" name="processInstanceId" th:value="${instance.id}" />
+                    <button type="submit" style="padding: 5px 10px; font-size: 0.9em; background-color:#28a745; border-color:#28a745;">Doğrulama Görevini Tamamla</button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tamamlanmış Süreçler Bölümü -->
+    <!-- Controller'dan gelen değişken adı completedInstances varsayılıyor -->
+    <h2>Tamamlanmış Süreçler (<span th:text="${#lists.size(completedInstances)}">0</span>)</h2>
+    <div th:if="${#lists.isEmpty(completedInstances)}" class="no-data">
+        Tamamlanmış süreç bulunmamaktadır.
+    </div>
+    <div th:unless="${#lists.isEmpty(completedInstances)}">
+        <div th:each="h_instance : ${completedInstances}" class="process-instance">
+            <div class="process-header">
+                <span>Instance ID: <span class="instance-id" th:text="${h_instance.id}">hist-proc-id-456</span></span>
+                <span class="instance-time">Bitiş: <span th:text="${h_instance.endTime != null ? #dates.format(h_instance.endTime, 'dd.MM.yyyy HH:mm') : 'N/A'}">...</span></span>
+            </div>
+            <!-- Tamamlanmış süreçte YENİ yapıya göre her şey 'completed' stilinde olacak -->
+            <div class="process-flow">
+                <div class="flow-element event-circle state-completed" title="startEvent"><span>S</span></div>
+                <span class="arrow arrow-completed">→</span>
+                <div class="flow-element task-rect state-completed" title="persistReceivedTask"><span>Kayıt</span></div>
+                <span class="arrow arrow-completed">→</span>
+                <!-- YENİ DOĞRULAMA GÖREVİ (TAMAMLANMIŞ) -->
+                <div class="flow-element task-rect state-completed" title="validateCargoTask"><span>Doğrulama</span></div>
+                <span class="arrow arrow-completed">→</span>
+                <div class="flow-element event-circle end-event state-completed" title="endEvent"><span>E</span></div>
+            </div>
+        </div>
+    </div>
+
+</div> <!-- container sonu -->
+</body>
+</html>
