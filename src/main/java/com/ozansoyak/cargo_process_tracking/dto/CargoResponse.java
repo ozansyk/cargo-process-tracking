@@ -11,5 +11,5 @@ public class CargoResponse {
     private Long id;
     private String trackingNumber;
     private String initialStatus;
-    private Long processInstanceId;
+    private String processInstanceId;
 }

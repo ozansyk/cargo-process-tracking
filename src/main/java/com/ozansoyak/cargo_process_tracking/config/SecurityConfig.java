@@ -32,7 +32,9 @@ public class SecurityConfig {
         http
                 .csrf().disable()
                 .authorizeHttpRequests()
-                .requestMatchers("/", "/register", "/login", "/index", "/api/cargos", //TODO /api/cargos kaldırılacak
+                .requestMatchers("/", "/register", "/login", "/index",
+                        "/api/cargos", "/monitor/**", "/flowable-monitor", //TODO login yapılınca kalkacak.
+                        "/flowable-admin/api/**", "/error", //TODO login yapılınca kalkacak.
                         "/images/**", "/css/**", "/js/**").permitAll()
                 .anyRequest().authenticated()
                 .and()

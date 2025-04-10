@@ -83,22 +83,16 @@ public class CargoServiceImpl implements CargoService {
             throw new RuntimeException("Kargo süreci başlatılamadı: " + e.getMessage(), e);
         }
 
-        String processInstanceId = processInstance.getId();
+        String processInstanceId = processInstance.getProcessInstanceId();
         savedCargo.setProcessInstanceId(processInstanceId);
         savedCargo.setCurrentStatus(CargoStatus.RECEIVED);
         cargoRepository.save(savedCargo);
-
-        long processInstanceIdAsLong = -1;
-        try {
-            processInstanceIdAsLong = Long.parseLong(processInstanceId);
-        } catch (NumberFormatException e) {
-        }
 
         return new CargoResponse(
                 savedCargo.getId(),
                 savedCargo.getTrackingNumber(),
                 CargoStatus.RECEIVED.name(),
-                processInstanceIdAsLong
+                processInstanceId
         );
     }
 
