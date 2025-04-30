@@ -41,7 +41,14 @@ spring:
           auth: true
           starttls:
             enable: true
-
-flowable:
-  check-process-definitions: true
-  database-schema-update: true
+camunda:
+  bpm:
+    admin-user:
+      id: admin
+      password: admin
+      first-name: Admin
+      last-name: User
+      email: admin@example.com
+    database:
+      schema-update: true
+      type: postgres

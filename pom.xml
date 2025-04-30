@@ -2,30 +2,38 @@
 <project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
 		 xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
 	<modelVersion>4.0.0</modelVersion>
-	<parent>
-		<groupId>org.springframework.boot</groupId>
-		<artifactId>spring-boot-starter-parent</artifactId>
-		<version>3.3.4</version>
-		<relativePath/>
-	</parent>
 	<groupId>com.ozansoyak</groupId>
 	<artifactId>cargo-process-tracking</artifactId>
 	<version>0.0.1-SNAPSHOT</version>
 	<name>cargo-process-tracking</name>
-	<description>Cargo process tracking project using Flowable</description>
+	<!-- Açıklamayı güncelleyelim -->
+	<description>Cargo process tracking project using Camunda Platform 7</description>
 
 	<properties>
 		<java.version>17</java.version>
-		<!-- Flowable versiyonu (SB 3.2 desteği için Milestone veya uygun son sürüm) -->
-		<flowable.version>7.1.0</flowable.version>
+		<camunda.version>7.22.0</camunda.version>
 		<lombok.version>1.18.30</lombok.version>
-		<!-- GRPC Properties Kaldırıldı -->
+		<maven.compiler.source>17</maven.compiler.source>
+		<maven.compiler.target>17</maven.compiler.target>
 	</properties>
 
-	<!-- dependencyManagement'den GRPC BOM kaldırıldı -->
 	<dependencyManagement>
 		<dependencies>
-			<!-- Başka BOM'lar varsa buraya -->
+			<dependency>
+				<groupId>org.springframework.boot</groupId>
+				<artifactId>spring-boot-dependencies</artifactId>
+				<version>3.3.3</version>
+				<type>pom</type>
+				<scope>import</scope>
+			</dependency>
+
+			<dependency>
+				<groupId>org.camunda.bpm</groupId>
+				<artifactId>camunda-bom</artifactId>
+				<version>7.22.0</version>
+				<scope>import</scope>
+				<type>pom</type>
+			</dependency>
 		</dependencies>
 	</dependencyManagement>
 
@@ -49,21 +57,14 @@
 		</dependency>
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
-			<artifactId>spring-boot-starter-actuator</artifactId>
-		</dependency>
-		<dependency>
-			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-thymeleaf</artifactId>
 		</dependency>
 
-		<!-- Flowable Spring Boot Starter (BPMN Engine + Spring Entegrasyonu) -->
+		<!-- === CAMUNDA BAĞIMLILIKLARI === -->
 		<dependency>
-			<groupId>org.flowable</groupId>
-			<artifactId>flowable-spring-boot-starter-process</artifactId>
-			<version>${flowable.version}</version>
+			<groupId>org.camunda.bpm.springboot</groupId>
+			<artifactId>camunda-bpm-spring-boot-starter-webapp</artifactId>
 		</dependency>
-
-		<!-- gRPC Bağımlılıkları KALDIRILDI -->
 
 		<!-- Veritabanı Sürücüsü -->
 		<dependency>
@@ -72,7 +73,7 @@
 			<scope>runtime</scope>
 		</dependency>
 
-		<!-- JAXB (Gerekliyse kalabilir) -->
+		<!-- JAXB (Spring Boot 3 / Java 11+ için genellikle gereklidir) -->
 		<dependency>
 			<groupId>jakarta.xml.bind</groupId>
 			<artifactId>jakarta.xml.bind-api</artifactId>
@@ -80,7 +81,7 @@
 		<dependency>
 			<groupId>org.glassfish.jaxb</groupId>
 			<artifactId>jaxb-runtime</artifactId>
-			<scope>runtime</scope>
+			<scope>runtime</scope> <!-- Sadece çalışma zamanında gerekli -->
 		</dependency>
 
 		<!-- Lombok -->
@@ -91,24 +92,26 @@
 			<scope>provided</scope>
 		</dependency>
 
-		<!-- Test Bağımlılıkları -->
+		<!-- === TEST BAĞIMLILIKLARI === -->
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-test</artifactId>
 			<scope>test</scope>
+			<exclusions>
+				<exclusion> <!-- JUnit 4 bağımlılıklarını dışlayalım (JUnit 5 kullanacağız) -->
+					<groupId>org.junit.vintage</groupId>
+					<artifactId>junit-vintage-engine</artifactId>
+				</exclusion>
+			</exclusions>
 		</dependency>
-		<dependency>
-			<groupId>org.springframework.security</groupId>
-			<artifactId>spring-security-test</artifactId>
-			<scope>test</scope>
-		</dependency>
-		<!-- GRPC Test Bağımlılığı KALDIRILDI -->
-		<!-- Flowable Test Bağımlılıkları KALDIRILDI -->
+
+		<!-- Test için H2 Database -->
 		<dependency>
 			<groupId>com.h2database</groupId>
 			<artifactId>h2</artifactId>
 			<scope>test</scope>
 		</dependency>
+		<!-- Flowable Test bağımlılığı kaldırıldı -->
 	</dependencies>
 
 	<build>
@@ -117,11 +120,21 @@
 			<plugin>
 				<groupId>org.springframework.boot</groupId>
 				<artifactId>spring-boot-maven-plugin</artifactId>
+				<version>3.3.3</version>
+				<configuration>
+					<excludes>
+						<exclude>
+							<groupId>org.projectlombok</groupId>
+							<artifactId>lombok</artifactId>
+						</exclude>
+					</excludes>
+				</configuration>
 			</plugin>
 			<!-- Maven Compiler Plugin -->
 			<plugin>
 				<groupId>org.apache.maven.plugins</groupId>
 				<artifactId>maven-compiler-plugin</artifactId>
+				<!-- Versiyon Spring Boot Parent tarafından yönetilir -->
 				<configuration>
 					<source>${java.version}</source>
 					<target>${java.version}</target>
@@ -131,11 +144,11 @@
 							<artifactId>lombok</artifactId>
 							<version>${lombok.version}</version>
 						</path>
+						<!-- Gerekirse başka annotation processorlar buraya eklenebilir -->
 					</annotationProcessorPaths>
 				</configuration>
 			</plugin>
-			<!-- Protobuf Plugin KALDIRILDI -->
-			<!-- OS Maven Plugin KALDIRILDI -->
+			<!-- GRPC/Protobuf ile ilgili pluginler kaldırıldı -->
 		</plugins>
 	</build>
 

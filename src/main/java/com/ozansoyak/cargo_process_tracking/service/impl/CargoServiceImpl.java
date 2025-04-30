@@ -11,8 +11,9 @@ import com.ozansoyak.cargo_process_tracking.service.CargoService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
-import org.flowable.engine.RuntimeService;
-import org.flowable.engine.runtime.ProcessInstance;
+// Camunda importları
+import org.camunda.bpm.engine.RuntimeService;
+import org.camunda.bpm.engine.runtime.ProcessInstance;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -28,71 +29,84 @@ import java.time.LocalDateTime;
 public class CargoServiceImpl implements CargoService {
 
     private final CargoRepository cargoRepository;
-    private final RuntimeService runtimeService;
+    private final RuntimeService runtimeService; // Camunda RuntimeService enjekte edilecek
 
-    private static final String FLOWABLE_PROCESS_DEFINITION_KEY = "simpleCargoProcess"; //TODO Burası processId'ye göre değişecek.
+    // Process Definition Key (BPMN dosyasındaki process id ile aynı olmalı)
+    private static final String CAMUNDA_PROCESS_DEFINITION_KEY = "simpleCargoProcess";
 
     private static final int MAX_TRACKING_NUMBER_ATTEMPTS = 10;
 
     @Override
     @Transactional
     public CargoResponse createCargoAndStartProcess(CreateCargoRequest request) {
-        log.info("Yeni kargo oluşturma ve BASİT Flowable süreci başlatma isteği alındı.");
+        log.info("Yeni kargo oluşturma ve CAMUNDA süreci başlatma isteği alındı."); // Log mesajı güncellendi
 
         String trackingNumber = generateUniqueTrackingNumber();
         log.debug("Takip numarası üretildi: {}", trackingNumber);
 
         Cargo cargo = Cargo.builder()
                 .trackingNumber(trackingNumber)
-                // Gönderici Bilgileri
                 .senderName(request.getSenderName())
                 .senderAddress(request.getSenderAddress())
                 .senderCity(request.getSenderCity())
                 .senderPhone(request.getSenderPhone())
                 .senderEmail(request.getSenderEmail())
-                // Alıcı Bilgileri
                 .receiverName(request.getReceiverName())
                 .receiverAddress(request.getReceiverAddress())
                 .receiverCity(request.getReceiverCity())
                 .receiverPhone(request.getReceiverPhone())
                 .receiverEmail(request.getReceiverEmail())
-                // Kargo Detayları
                 .weight(request.getWeight())
                 .dimensions(request.getDimensions())
                 .contentDescription(request.getContentDescription())
-                // Başlangıç durumu
-                .currentStatus(CargoStatus.PENDING)
+                .currentStatus(CargoStatus.PENDING) // Başlangıç durumu PENDING
                 .build();
 
         Cargo savedCargo = cargoRepository.save(cargo);
         log.info("Kargo veritabanına kaydedildi. ID: {}", savedCargo.getId());
 
+        // Süreç değişkenleri
         Map<String, Object> processVariables = new HashMap<>();
-        String businessKey = savedCargo.getTrackingNumber();
-        processVariables.put("cargoId", savedCargo.getId());
-        processVariables.put("trackingNumber", savedCargo.getTrackingNumber());
+        String businessKey = savedCargo.getTrackingNumber(); // Business key olarak takip numarası
+        processVariables.put("cargoId", savedCargo.getId()); // Delegate'in kullanması için ID
+        processVariables.put("trackingNumber", savedCargo.getTrackingNumber()); // Gerekirse süreçte kullanmak için
+        // Başlatan kullanıcıyı ekleyebiliriz (Spring Security entegrasyonu varsa)
+        // Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        // if (auth != null && auth.isAuthenticated()) {
+        //     processVariables.put("initiator", auth.getName());
+        // }
 
         ProcessInstance processInstance;
         try {
+            // Camunda RuntimeService ile süreç başlatma
             processInstance = runtimeService.startProcessInstanceByKey(
-                    FLOWABLE_PROCESS_DEFINITION_KEY,
+                    CAMUNDA_PROCESS_DEFINITION_KEY,
                     businessKey,
                     processVariables
             );
+            log.info("Camunda süreci başlatıldı. Process Instance ID: {}, Business Key: {}",
+                    processInstance.getProcessInstanceId(), businessKey);
         } catch (Exception e) {
+            // Hata durumunda daha detaylı loglama ve exception fırlatma
+            log.error("Camunda süreci başlatılamadı (key={}): {}", CAMUNDA_PROCESS_DEFINITION_KEY, e.getMessage(), e);
             throw new RuntimeException("Kargo süreci başlatılamadı: " + e.getMessage(), e);
         }
 
-        String processInstanceId = processInstance.getProcessInstanceId();
-        savedCargo.setProcessInstanceId(processInstanceId);
-        savedCargo.setCurrentStatus(CargoStatus.RECEIVED);
-        cargoRepository.save(savedCargo);
+        // Süreç ID'sini kargo nesnesine kaydet
+        // Not: Süreç hemen ilk adıma geçeceği için durumu burada RECEIVED yapmak yerine
+        // PersistStatusWorker'ın yapmasını beklemek daha doğru olabilir.
+        // Ancak ilk adım senkron ise ve hemen çalışacaksa, burada da set edilebilir.
+        // Şimdilik Worker'a bırakalım, create response'da başlangıç durumunu gösterelim.
+        savedCargo.setProcessInstanceId(processInstance.getProcessInstanceId());
+        // savedCargo.setCurrentStatus(CargoStatus.RECEIVED); // Worker yapsın
+        cargoRepository.save(savedCargo); // Sadece processInstanceId'yi kaydet
 
+        // İstemciye dönülecek yanıt
         return new CargoResponse(
                 savedCargo.getId(),
                 savedCargo.getTrackingNumber(),
-                CargoStatus.RECEIVED.name(),
-                processInstanceId
+                savedCargo.getCurrentStatus().name(), // Başlangıç durumu PENDING olarak dönecek
+                processInstance.getProcessInstanceId()
         );
     }
 

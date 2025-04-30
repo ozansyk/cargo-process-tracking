@@ -36,7 +36,7 @@ public class SecurityConfig {
                         "/api/cargos", "/monitor/**", "/flowable-monitor", //TODO login yapılınca kalkacak.
                         "/flowable-admin/api/**", "/error", //TODO login yapılınca kalkacak.
                         "/images/**", "/css/**", "/js/**").permitAll()
-                .anyRequest().authenticated()
+                .anyRequest().permitAll()
                 .and()
                 .formLogin()
                 .loginPage("/login")
