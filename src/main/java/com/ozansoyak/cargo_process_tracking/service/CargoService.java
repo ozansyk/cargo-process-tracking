@@ -1,29 +1,28 @@
 package com.ozansoyak.cargo_process_tracking.service;
 
+// ApproveNextStepRequest importu kaldırıldı
 import com.ozansoyak.cargo_process_tracking.dto.CreateCargoRequest;
 import com.ozansoyak.cargo_process_tracking.dto.CargoResponse;
-import jakarta.persistence.EntityNotFoundException; // Veya kendi exception'ınız
+import jakarta.persistence.EntityNotFoundException;
 
 public interface CargoService {
 
-    /**
-     * Yeni bir kargo oluşturur ve ilgili Camunda sürecini başlatır.
-     * @param request Kargo oluşturma bilgilerini içeren DTO.
-     * @return Oluşturulan kargo bilgilerini ve süreç ID'sini içeren DTO.
-     */
     CargoResponse createCargoAndStartProcess(CreateCargoRequest request);
 
-    /**
-     * Belirtilen takip numarasına sahip kargo sürecini iptal eder.
-     * Sürecin iptal edilmesi için Camunda'daki ilgili süreç değişkenini günceller.
-     * Sürecin bir sonraki kontrol noktasında (gateway) iptal yoluna girmesi beklenir.
-     *
-     * @param trackingNumber İptal edilecek kargonun takip numarası.
-     * @throws EntityNotFoundException Kargo veya ilgili süreç bulunamazsa.
-     * @throws IllegalStateException Süreç iptal edilemeyecek bir durumdaysa (örn. zaten bitmişse).
-     */
     void cancelCargoProcess(String trackingNumber);
 
-    // TODO: Takip bilgisi getirme metodu eklenebilir
+    /**
+     * Belirtilen takip numarasına ait süreçteki mevcut aktif kullanıcı görevini tamamlar
+     * ve bir sonraki adıma geçiş için gerekli koşulu ayarlar.
+     *
+     * @param trackingNumber Süreci ilerletilecek kargonun takip numarası.
+     * @throws EntityNotFoundException Kargo bulunamazsa.
+     * @throws IllegalStateException Süreç aktif değilse veya beklenmedik bir durumdaysa.
+     * @throws IllegalArgumentException Tamamlanan göreve göre bir sonraki adım belirlenemezse.
+     */
+    void completeUserTaskAndPrepareNextStep(String trackingNumber); // Yeni metot
+
+    // approveNextStep METODU KALDIRILDI
+
     // TrackingInfoResponse getTrackingInfo(String trackingNumber);
 }
