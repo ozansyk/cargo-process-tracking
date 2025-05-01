@@ -126,26 +126,29 @@ public class CargoServiceImpl implements CargoService {
 
     @Override
     @Transactional
-    public void cancelCargoProcess(String trackingNumber) {
-        // ... (öncekiyle aynı)
+    public void cancelCargoProcess(String trackingNumber) { // *** Tamamen Yeniden Yazıldı ***
         log.info("{} takip numaralı kargo için iptal işlemi başlatıldı.", trackingNumber);
 
+        // 1. Kargoyu Bul
         Cargo cargo = cargoRepository.findByTrackingNumber(trackingNumber)
                 .orElseThrow(() -> {
                     log.warn("İptal işlemi: Takip numarası ({}) ile kargo bulunamadı.", trackingNumber);
                     return new EntityNotFoundException("Takip numarası ile kargo bulunamadı: " + trackingNumber);
                 });
 
+        // 2. DB Durumunu Güncelle (eğer zaten bitmemişse)
+        if (cargo.getCurrentStatus() == CargoStatus.CANCELLED || cargo.getCurrentStatus() == CargoStatus.DELIVERED) {
+            log.info("Kargo (ID: {}) zaten '{}' durumunda. İptal işlemi atlanıyor.", cargo.getId(), cargo.getCurrentStatus());
+            return;
+        }
+        log.info("Kargo durumu (ID: {}) CANCELLED olarak güncelleniyor.", cargo.getId());
+        cargo.setCurrentStatus(CargoStatus.CANCELLED);
+        cargoRepository.save(cargo);
+
+        // 3. Camunda Sürecini Bul
         String processInstanceId = cargo.getProcessInstanceId();
         if (processInstanceId == null) {
-            log.warn("İptal işlemi: Kargo (ID: {}) için Camunda Process Instance ID bulunamadı.", cargo.getId());
-            if(cargo.getCurrentStatus() != CargoStatus.CANCELLED && cargo.getCurrentStatus() != CargoStatus.DELIVERED) {
-                cargo.setCurrentStatus(CargoStatus.CANCELLED);
-                cargoRepository.save(cargo);
-                log.info("Kargo (ID: {}) durumu Process Instance ID olmadığı için direkt CANCELLED yapıldı.", cargo.getId());
-            } else {
-                log.info("Kargo (ID: {}) zaten iptal edilmiş veya teslim edilmiş durumda (Süreç ID'si yok).", cargo.getId());
-            }
+            log.warn("İptal işlemi: Kargo (ID: {}) için Camunda Process Instance ID bulunamadı. DB güncellendi, Camunda işlemi atlandı.", cargo.getId());
             return;
         }
 
@@ -157,42 +160,51 @@ public class CargoServiceImpl implements CargoService {
                     .singleResult();
         } catch(ProcessEngineException pee) {
             log.error("Camunda process instance sorgulanırken hata (ID: {}): {}", processInstanceId, pee.getMessage(), pee);
-            throw new RuntimeException("Süreç sorgulanırken Camunda hatası: " + pee.getMessage(), pee);
-        }
-
-        if (processInstance == null) {
-            log.warn("İptal işlemi: Aktif Camunda süreci bulunamadı (ID: {}). Kargo durumu: {}", processInstanceId, cargo.getCurrentStatus());
-            if (cargo.getCurrentStatus() != CargoStatus.CANCELLED && cargo.getCurrentStatus() != CargoStatus.DELIVERED) {
-                log.info("Aktif süreç yok, kargo durumu (ID: {}) manuel olarak CANCELLED yapılıyor.", cargo.getId());
-                cargo.setCurrentStatus(CargoStatus.CANCELLED);
-                cargoRepository.save(cargo);
-            } else {
-                log.info("Süreç (ID: {}) zaten tamamlanmış ({}) veya iptal edilmiş.", processInstanceId, cargo.getCurrentStatus());
-            }
+            // DB güncel, belki devam etmeye gerek yok veya hatayı farklı yönet
             return;
         }
 
-        try {
-            Object currentCancelFlag = runtimeService.getVariable(processInstanceId, "isCancelled");
-            if (currentCancelFlag != null && Boolean.TRUE.equals(currentCancelFlag)) {
-                log.info("Süreç (ID: {}) zaten iptal olarak işaretlenmiş.", processInstanceId);
-                if(cargo.getCurrentStatus() != CargoStatus.CANCELLED) {
-                    log.warn("Süreç iptal edilmiş ama DB durumu farklı ({}). DB durumu CANCELLED yapılıyor.", cargo.getCurrentStatus());
-                    Optional<Cargo> latestCargo = cargoRepository.findById(cargo.getId());
-                    if(latestCargo.isPresent() && latestCargo.get().getCurrentStatus() != CargoStatus.CANCELLED) {
-                        latestCargo.get().setCurrentStatus(CargoStatus.CANCELLED);
-                        cargoRepository.save(latestCargo.get());
-                    }
-                }
-                return;
-            }
+        if (processInstance == null) {
+            log.warn("İptal işlemi: Aktif Camunda süreci bulunamadı (ID: {}). DB güncellendi, Camunda işlemi atlandı.", processInstanceId);
+            return;
+        }
 
+        // 4. Camunda 'isCancelled' Değişkenini Ayarla
+        try {
+            log.info("Aktif Camunda süreci (ID: {}) bulunuyor. İptal değişkeni ayarlanacak.", processInstanceId);
             runtimeService.setVariable(processInstanceId, "isCancelled", true);
             log.info("Camunda süreci (ID: {}) için 'isCancelled' değişkeni 'true' olarak ayarlandı.", processInstanceId);
-
         } catch (ProcessEngineException e) {
             log.error("Camunda süreci (ID: {}) iptal değişkeni ayarlanırken hata: {}", processInstanceId, e.getMessage(), e);
-            throw new RuntimeException("Süreç iptal edilirken Camunda hatası: " + e.getMessage(), e);
+            // Değişken ayarlanamasa bile devam edip görevi tamamlamayı deneyebilir miyiz? Riskli olabilir.
+            // Şimdilik burada duralım, hata olursa en azından DB güncel.
+            throw new RuntimeException("Süreç iptal edilirken Camunda değişkeni ayarlanamadı: " + e.getMessage(), e);
+        }
+
+        // 5. Bekleyen Aktif User Task Varsa Tamamla
+        Task activeTask = null;
+        try {
+            activeTask = taskService.createTaskQuery()
+                    .processInstanceId(processInstanceId)
+                    .active()
+                    .singleResult();
+        } catch(ProcessEngineException e) {
+            // Görev sorgularken hata olursa logla ama işlemi durdurma, değişken ayarlandı.
+            log.error("İptal işlemi sırasında aktif görev sorgulanırken hata oluştu (Process Instance ID: {}): {}", processInstanceId, e.getMessage(), e);
+        }
+
+        if (activeTask != null) {
+            log.info("Süreç iptal edildiği için aktif görev (Task ID: {}, Task Key: {}) programatik olarak tamamlanıyor.", activeTask.getId(), activeTask.getTaskDefinitionKey());
+            try {
+                taskService.complete(activeTask.getId());
+                log.info("Aktif görev (Task ID: {}) iptal nedeniyle başarıyla tamamlandı.", activeTask.getId());
+            } catch (ProcessEngineException e){
+                // Görev tamamlama başarısız olursa (örn. başka biri tamamladıysa) logla.
+                log.error("İptal işlemi sırasında aktif görev (Task ID: {}) tamamlanırken hata: {}. Süreç yine de iptal yoluna girmeli.", activeTask.getId(), e.getMessage(), e);
+                // Bu durumda hata fırlatmak yerine devam etmek mantıklı olabilir, çünkü isCancelled=true.
+            }
+        } else {
+            log.info("İptal işlemi sırasında tamamlanacak aktif kullanıcı görevi bulunamadı (Süreç muhtemelen bir gateway'de veya service task'ta). Değişken ayarlandı, süreç ilerleyince iptal yoluna girecek.");
         }
     }
 
