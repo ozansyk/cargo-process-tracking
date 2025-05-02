@@ -10,6 +10,7 @@ import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.config.annotation.authentication.builders.AuthenticationManagerBuilder;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity; // Bu anotasyon önemli
+import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
@@ -36,71 +37,54 @@ public class SecurityConfig {
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         http
-                // CSRF genellikle stateful web uygulamaları için önerilir, ancak
-                // Camunda REST API'leri ile sorun çıkarabilir. Şimdilik kapalı bırakalım.
-                // Eğer sadece MVC kullanıyorsanız ve REST API'leri dışarıya açmıyorsanız
-                // CSRF'ı etkinleştirmeyi düşünebilirsiniz (ama ek yapılandırma gerektirir).
-                .csrf(csrf -> csrf.disable()) // Lambda DSL ile CSRF kapatma
+                .csrf(AbstractHttpConfigurer::disable)
                 .authorizeHttpRequests(authz -> authz
                         // Herkese açık yollar
                         .requestMatchers(
-                                "/",                // Ana sayfa (varsa)
-                                "/login",           // Giriş sayfası
-                                "/track**",         // Kargo takip sayfası ve sorguları
-                                "/error",           // Spring Boot hata sayfası
-                                "/images/**",       // Statik kaynaklar
-                                "/css/**",
-                                "/js/**"
-                                // "/register"      // Kayıt sayfası (varsa) herkese açık olmalı
-                                // "/api/cargos" // API endpoint'leri için ayrı kural gerekebilir (örn. Basic Auth veya JWT)
-                                // Şimdilik API'yi de açık bırakalım test için, sonra kısıtlanabilir.
-                                ,"/api/cargos/**"
-                                // "/monitor/**", "/flowable-monitor" // Bunlar Camunda değilse kaldırılabilir
+                                "/", "/login", "/track**", "/error",
+                                "/images/**", "/css/**", "/js/**"
+                                ,"/api/cargos/**" // Test için açık, sonra kısıtla
                         ).permitAll()
-                        // Camunda Webapp ve REST API'leri (genellikle auth gerektirir)
-                        .requestMatchers(
-                                "/camunda/**",      // Camunda Cockpit/Admin/Tasklist
-                                "/engine-rest/**",  // Camunda REST API
-                                "/app/**"           // Camunda Webapp path'leri
-                        ).authenticated() // Camunda kendi iç güvenliğini de yönetir (admin user)
-                        // Personel Paneli
-                        .requestMatchers("/panel/**").authenticated() // Sadece giriş yapanlar
-                        // Diğer tüm istekler kimlik doğrulaması gerektirsin
+                        // Camunda
+                        .requestMatchers("/camunda/**", "/engine-rest/**", "/app/**").authenticated()
+                        // --- YENİ KURALLAR ---
+                        // Kullanıcı Yönetimi sadece ADMIN rolüne sahip olanlar
+                        .requestMatchers("/panel/kullanici-yonetimi").hasRole("ADMIN")
+                        // Diğer tüm /panel altındaki yollar en azından giriş yapmış olmayı gerektirsin
+                        .requestMatchers("/panel/**").authenticated()
+                        // ----------------------
+                        // Diğer tüm istekler (yukarıdakilerle eşleşmeyen) kimlik doğrulaması gerektirsin
                         .anyRequest().authenticated()
                 )
                 .formLogin(form -> form
-                        .loginPage("/login") // Özel giriş sayfamız
-                        .loginProcessingUrl("/login") // Spring Security bu URL'i dinler (POST)
-                        .usernameParameter("email") // Formdaki input name="email" olmalı
-                        .passwordParameter("password") // Formdaki input name="password" olmalı
-                        .defaultSuccessUrl("/panel", true) // Başarılı girişte yönlendir
-                        .failureHandler((request, response, exception) -> { // Özel hata yönetimi
-                            String email = request.getParameter("email"); // Formdan email'i al
+                        .loginPage("/login")
+                        .loginProcessingUrl("/login")
+                        .usernameParameter("email")
+                        .passwordParameter("password")
+                        .defaultSuccessUrl("/panel", true) // Başarılı girişte panele yönlendir
+                        .failureHandler((request, response, exception) -> { // Hata yönetimi aynı
+                            String email = request.getParameter("email");
                             Optional<UserEntity> userOpt = userRepository.findByEmail(email);
                             String errorMessage;
-
                             if (userOpt.isPresent() && !userOpt.get().getIsEnabled()) {
                                 errorMessage = "Hesabınız pasif durumda. Lütfen yönetici ile iletişime geçiniz.";
                             } else if (exception.getMessage() != null && exception.getMessage().contains("Bad credentials")) {
-                                // Generic "Bad credentials" yerine daha kullanıcı dostu mesaj
                                 errorMessage = "Geçersiz kullanıcı adı veya şifre.";
                             } else {
-                                // Diğer authentication hataları (örn: kilitli hesap vs.)
-                                // exception.getMessage() daha detaylı bilgi verebilir, loglamak iyi olur.
                                 log.error("Giriş hatası - Kullanıcı: {}, Hata: {}", email, exception.getMessage());
                                 errorMessage = "Giriş sırasında bir sorun oluştu.";
                             }
                             String encodedErrorMessage = URLEncoder.encode(errorMessage, StandardCharsets.UTF_8);
                             response.sendRedirect("/login?error=" + encodedErrorMessage);
                         })
-                        .permitAll() // Giriş sayfasının kendisine herkes erişebilmeli
+                        .permitAll()
                 )
                 .logout(logout -> logout
-                        .logoutUrl("/logout") // Çıkış URL'i
-                        .logoutSuccessUrl("/login?logout") // Başarılı çıkışta yönlendir
-                        .invalidateHttpSession(true) // Oturumu geçersiz kıl
-                        .deleteCookies("JSESSIONID") // Oturum çerezini sil
-                        .permitAll() // Çıkış işleminin kendisine herkes erişebilmeli
+                        .logoutUrl("/logout")
+                        .logoutSuccessUrl("/login?logout")
+                        .invalidateHttpSession(true)
+                        .deleteCookies("JSESSIONID")
+                        .permitAll()
                 );
 
         return http.build();

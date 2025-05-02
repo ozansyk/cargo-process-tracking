@@ -1,8 +1,6 @@
 package com.ozansoyak.cargo_process_tracking.service;
 
-import com.ozansoyak.cargo_process_tracking.dto.CreateCargoRequest;
-import com.ozansoyak.cargo_process_tracking.dto.CargoResponse;
-import com.ozansoyak.cargo_process_tracking.dto.TrackingInfoResponse; // Eklendi
+import com.ozansoyak.cargo_process_tracking.dto.*; // DTO importları
 import jakarta.persistence.EntityNotFoundException;
 
 public interface CargoService {
@@ -13,13 +11,11 @@ public interface CargoService {
 
     void completeUserTaskAndPrepareNextStep(String trackingNumber);
 
+    TrackingInfoResponse getTrackingInfo(String trackingNumber);
+
     /**
-     * Belirtilen takip numarasına ait kargonun güncel durumunu ve
-     * süreç geçmişini getirir.
-     *
-     * @param trackingNumber Sorgulanacak kargonun takip numarası.
-     * @return Kargo takip bilgilerini içeren DTO.
-     * @throws EntityNotFoundException Kargo bulunamazsa.
+     * Personel paneli için gerekli özet verileri (widget sayıları, son işlemler) getirir.
+     * @return Panel verilerini içeren DTO.
      */
-    TrackingInfoResponse getTrackingInfo(String trackingNumber); // Yeni metot eklendi
+    PanelDataDto getPanelData(); // Yeni metot
 }
