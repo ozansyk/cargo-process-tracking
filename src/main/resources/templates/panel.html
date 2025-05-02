@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="tr" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Personel Paneli</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        /* Panelinize özel stiller ekleyebilirsiniz */
+        body { padding-top: 5rem; }
+        .logout-btn { margin-left: 1rem; }
+    </style>
+</head>
+<body>
+
+<nav class="navbar navbar-expand-md navbar-dark fixed-top bg-dark">
+    <div class="container-fluid">
+        <a class="navbar-brand" href="#">Personel Paneli</a>
+        <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarCollapse" aria-controls="navbarCollapse" aria-expanded="false" aria-label="Toggle navigation">
+            <span class="navbar-toggler-icon"></span>
+        </button>
+        <div class="collapse navbar-collapse" id="navbarCollapse">
+            <ul class="navbar-nav me-auto mb-2 mb-md-0">
+                <li class="nav-item">
+                    <a class="nav-link active" aria-current="page" th:href="@{/panel}">Ana Sayfa</a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="#">Görevler</a> <!-- Örnek link -->
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" th:href="@{/track}">Kargo Takip</a> <!-- Takip sayfasına link -->
+                </li>
+            </ul>
+            <form class="d-flex" th:action="@{/logout}" method="post">
+                <span class="navbar-text me-3" th:text="${'Hoşgeldin, ' + username}">Hoşgeldin Kullanıcı</span>
+                <button class="btn btn-outline-danger logout-btn" type="submit">Çıkış Yap</button>
+            </form>
+        </div>
+    </div>
+</nav>
+
+<main class="container">
+    <div class="bg-light p-5 rounded">
+        <h1>Personel Paneline Hoş Geldiniz!</h1>
+        <p class="lead">Bu alanda personel işlemleri yer alacaktır.</p>
+        <!-- Buraya panel içeriği gelecek -->
+    </div>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>
