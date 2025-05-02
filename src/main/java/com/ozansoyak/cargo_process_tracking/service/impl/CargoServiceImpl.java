@@ -2,6 +2,8 @@ package com.ozansoyak.cargo_process_tracking.service.impl;
 
 import com.ozansoyak.cargo_process_tracking.dto.CreateCargoRequest;
 import com.ozansoyak.cargo_process_tracking.dto.CargoResponse;
+import com.ozansoyak.cargo_process_tracking.dto.TrackingHistoryEvent;
+import com.ozansoyak.cargo_process_tracking.dto.TrackingInfoResponse;
 import com.ozansoyak.cargo_process_tracking.exception.TrackingNumberGenerationException;
 import com.ozansoyak.cargo_process_tracking.model.Cargo;
 import com.ozansoyak.cargo_process_tracking.model.enums.CargoStatus;
@@ -11,10 +13,8 @@ import com.ozansoyak.cargo_process_tracking.service.CargoService;
 import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.camunda.bpm.engine.ProcessEngineException;
-import org.camunda.bpm.engine.RepositoryService; // Model API'ye erişim için eklendi
-import org.camunda.bpm.engine.RuntimeService;
-import org.camunda.bpm.engine.TaskService;
+import org.camunda.bpm.engine.*;
+import org.camunda.bpm.engine.history.HistoricActivityInstance;
 import org.camunda.bpm.engine.runtime.ProcessInstance;
 import org.camunda.bpm.engine.task.Task;
 // Camunda Model API importları
@@ -27,14 +27,12 @@ import org.camunda.bpm.model.bpmn.instance.camunda.CamundaProperty;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.Collection; // CamundaProperties.getCamundaProperties() için
-import java.util.HashMap;
-import java.util.List;      // Query.list() için
-import java.util.Map;
-import java.util.Optional;
+import java.time.ZoneId;
+import java.util.*;
 import java.util.concurrent.ThreadLocalRandom;
 import java.time.format.DateTimeFormatter;
 import java.time.LocalDateTime;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -45,10 +43,23 @@ public class CargoServiceImpl implements CargoService {
     private final RuntimeService runtimeService;
     private final TaskService taskService;
     private final RepositoryService repositoryService; // Model API için eklendi
+    private final HistoryService historyService;
 
     private static final String CAMUNDA_PROCESS_DEFINITION_KEY = "cargoTrackingProcessConditionalAndUserTaskAfterV2";
     private static final int MAX_TRACKING_NUMBER_ATTEMPTS = 10;
     private static final String NEXT_STEP_VARIABLE_PROPERTY_NAME = "nextStepVariable"; // User Task Extension Property adı
+
+    // Geçmişte göstermek istediğimiz Service Task ID'leri (Java'da filtrelemek için)
+    private static final Set<String> TRACKING_ACTIVITY_IDS = Set.of(
+            "task_UpdateStatusReceived",
+            "task_UpdateStatusLoaded1",
+            "task_UpdateStatusTransferCenter",
+            "task_UpdateStatusLoaded2",
+            "task_UpdateStatusDistributionArea",
+            "task_UpdateStatusOutForDelivery",
+            "task_UpdateStatusDelivered",
+            "task_UpdateStatusCancelled"
+    );
 
     @Override
     @Transactional
@@ -85,10 +96,6 @@ public class CargoServiceImpl implements CargoService {
         processVariables.put("trackingNumber", savedCargo.getTrackingNumber());
         processVariables.put("isCancelled", false); // İptal bayrağı başlangıçta false
 
-        // İlerleme değişkenleri (canProceedToX) başlangıçta set edilmiyor.
-        // Gateway'lerdeki koşul ${canProceedToX == true} şeklinde olduğu için,
-        // null olan değişkenler false olarak değerlendirilecektir.
-
         ProcessInstance processInstance;
         try {
             processInstance = runtimeService.startProcessInstanceByKey(
@@ -100,15 +107,12 @@ public class CargoServiceImpl implements CargoService {
                     processInstance.getProcessInstanceId(), businessKey);
         } catch (Exception e) {
             log.error("Camunda süreci başlatılamadı (key={}): {}", CAMUNDA_PROCESS_DEFINITION_KEY, e.getMessage(), e);
-            // Kritik hata, işlemi geri almalıyız (Transactional sayesinde otomatik)
             throw new RuntimeException("Kargo süreci başlatılamadı: " + e.getMessage(), e);
         }
 
-        // Süreç ID'sini kargoya kaydet
         savedCargo.setProcessInstanceId(processInstance.getProcessInstanceId());
-        cargoRepository.save(savedCargo); // Process ID'si ile tekrar kaydet
+        cargoRepository.save(savedCargo);
 
-        // Başlangıç durumu PENDING dönüyoruz, süreç ilerledikçe güncellenecek.
         return new CargoResponse(
                 savedCargo.getId(),
                 savedCargo.getTrackingNumber(),
@@ -122,23 +126,19 @@ public class CargoServiceImpl implements CargoService {
     public void cancelCargoProcess(String trackingNumber) {
         log.info("{} takip numaralı kargo için iptal işlemi başlatıldı.", trackingNumber);
 
-        // 1. Kargoyu Bul
         Cargo cargo = cargoRepository.findByTrackingNumber(trackingNumber)
                 .orElseThrow(() -> {
                     log.warn("İptal işlemi: Takip numarası ({}) ile kargo bulunamadı.", trackingNumber);
                     return new EntityNotFoundException("Takip numarası ile kargo bulunamadı: " + trackingNumber);
                 });
 
-        // 2. İptal Edilemez Durumları Kontrol Et
         if (cargo.getCurrentStatus() == CargoStatus.CANCELLED || cargo.getCurrentStatus() == CargoStatus.DELIVERED) {
             log.info("Kargo (ID: {}) zaten '{}' durumunda. İptal işlemi atlanıyor.", cargo.getId(), cargo.getCurrentStatus());
-            return; // Idempotency: Zaten bitmişse tekrar işlem yapma.
+            return;
         }
 
-        // 3. Camunda Sürecini Yönet
         String processInstanceId = cargo.getProcessInstanceId();
         if (processInstanceId == null) {
-            // Süreç ID'si yoksa (başlamamış/hata), manuel iptal et.
             log.warn("İptal işlemi: Kargo (ID: {}) için Camunda Process Instance ID bulunamadı. Durum manuel CANCELLED yapılıyor.", cargo.getId());
             cargo.setCurrentStatus(CargoStatus.CANCELLED);
             cargoRepository.save(cargo);
@@ -147,28 +147,23 @@ public class CargoServiceImpl implements CargoService {
 
         ProcessInstance processInstance = null;
         try {
-            // Aktif süreci bulmaya çalış
             processInstance = runtimeService.createProcessInstanceQuery()
                     .processInstanceId(processInstanceId)
                     .active()
-                    .singleResult(); // Aktif süreç yoksa hata fırlatır
+                    .singleResult();
         } catch (org.camunda.bpm.engine.exception.NullValueException | org.camunda.bpm.engine.exception.NotFoundException e) {
-            // Süreç bulunamadı veya aktif değil (bitmiş olabilir).
             log.warn("İptal işlemi: Aktif Camunda süreci bulunamadı veya süreç zaten bitmiş (ID: {}). Kargo durumu: {}", processInstanceId, cargo.getCurrentStatus());
-            // Kargonun durumu hala bitmemişse (CANCELLED/DELIVERED değilse), manuel iptal et.
             if (cargo.getCurrentStatus() != CargoStatus.CANCELLED && cargo.getCurrentStatus() != CargoStatus.DELIVERED) {
                 log.warn("Süreç bitmiş/bulunamadı ama kargo durumu (ID: {}) '{}'. Manuel olarak CANCELLED yapılıyor.", cargo.getId(), cargo.getCurrentStatus());
                 cargo.setCurrentStatus(CargoStatus.CANCELLED);
                 cargoRepository.save(cargo);
             }
-            return; // Süreç yoksa veya bitmişse daha fazla işlem yapma.
+            return;
         } catch(ProcessEngineException pee) {
-            // Diğer Camunda sorgu hataları
             log.error("Camunda process instance sorgulanırken hata (ID: {}): {}", processInstanceId, pee.getMessage(), pee);
             throw new RuntimeException("Süreç durumu sorgulanırken Camunda hatası: " + pee.getMessage(), pee);
         }
 
-        // 4. Camunda 'isCancelled' Değişkenini Ayarla (Eğer henüz false ise)
         try {
             log.info("Aktif Camunda süreci (ID: {}) bulunuyor. İptal değişkeni ayarlanacak.", processInstanceId);
             Object currentCancelVar = runtimeService.getVariable(processInstanceId, "isCancelled");
@@ -180,23 +175,18 @@ public class CargoServiceImpl implements CargoService {
             }
         } catch (ProcessEngineException e) {
             log.error("Camunda süreci (ID: {}) iptal değişkeni ayarlanırken hata: {}", processInstanceId, e.getMessage(), e);
-            // Değişken ayarlanamazsa iptal işlemi başarısız olur.
             throw new RuntimeException("Süreç iptal edilirken Camunda değişkeni ayarlanamadı: " + e.getMessage(), e);
         }
 
-        // 5. Bekleyen Aktif User Task Varsa Tamamla (Sürecin Gateway'e gitmesini hızlandırmak için)
         Task activeTask = null;
         try {
-            // Sürece ait aktif user task'ı bulmaya çalış (varsa)
             activeTask = taskService.createTaskQuery()
                     .processInstanceId(processInstanceId)
                     .active()
-                    .singleResult(); // Aktif task yoksa hata fırlatır
+                    .singleResult();
         } catch (org.camunda.bpm.engine.exception.NullValueException | org.camunda.bpm.engine.exception.NotFoundException e) {
-            // Aktif user task yoksa (gateway'de vs. bekliyorsa), sorun değil.
             log.info("İptal işlemi sırasında tamamlanacak aktif kullanıcı görevi bulunamadı. Süreç ilerleyince iptal yoluna girecek.");
         } catch(ProcessEngineException e) {
-            // Görev sorgularken başka bir hata olursa logla, ama devam etmeye çalışabiliriz.
             log.error("İptal işlemi sırasında aktif görev sorgulanırken hata oluştu (Process Instance ID: {}): {}. Değişken ayarlandı, ancak görev tamamlanamayabilir.", processInstanceId, e.getMessage(), e);
         }
 
@@ -206,34 +196,39 @@ public class CargoServiceImpl implements CargoService {
                 taskService.complete(activeTask.getId());
                 log.info("Aktif görev (Task ID: {}) iptal nedeniyle başarıyla tamamlandı.", activeTask.getId());
             } catch (ProcessEngineException e){
-                // Görev tamamlama başarısız olursa (örn. başka biri tamamladıysa, kilitliyse vs.) logla.
                 log.error("İptal işlemi sırasında aktif görev (Task ID: {}) tamamlanırken hata: {}. Süreç yine de iptal yoluna girmeli (isCancelled=true).", activeTask.getId(), e.getMessage(), e);
-                // Bu durumda hata fırlatmak yerine devam edebiliriz, isCancelled=true ayarlandı.
             }
         }
-        // İptal işlemi tetiklendi. Kargonun CANCELLED olması asenkron olarak service task tarafından yapılacak.
     }
 
 
     @Override
     @Transactional
     public void completeUserTaskAndPrepareNextStep(String trackingNumber) {
+        // Bu metot sizin sağladığınız orijinal kodla aynı bırakıldı.
+        // Eğer önceki adımdaki CANCELLED/DELIVERED kontrolünü istiyorsanız,
+        // ilgili if bloğunu buraya tekrar ekleyebilirsiniz.
         log.info("{} takip numaralı kargo için aktif görevi tamamlama ve sonraki adımı hazırlama isteği.", trackingNumber);
 
-        // 1. Kargoyu Bul
         Cargo cargo = cargoRepository.findByTrackingNumber(trackingNumber)
                 .orElseThrow(() -> new EntityNotFoundException("Takip numarası ile kargo bulunamadı: " + trackingNumber));
 
-        // 2. Son Durumları Kontrol Et
+        // Orijinal kodunuzdaki kontrol:
         if (cargo.getCurrentStatus() == CargoStatus.CANCELLED || cargo.getCurrentStatus() == CargoStatus.DELIVERED) {
             log.warn("complete-step: Kargo (Takip No: {}) zaten '{}' durumunda. Görev tamamlanamaz.", trackingNumber, cargo.getCurrentStatus());
             throw new IllegalStateException("Kargo zaten " + cargo.getCurrentStatus() + " durumunda olduğu için işlem yapılamaz.");
         }
+        // Eğer sadece CANCELLED kontrolü istiyorsanız:
+         /*
+         if (cargo.getCurrentStatus() == CargoStatus.CANCELLED) {
+              log.warn("complete-step: Kargo (Takip No: {}) zaten CANCELLED durumunda. Görev tamamlanamaz.", trackingNumber);
+              throw new IllegalStateException("Kargo zaten CANCELLED durumunda olduğu için işlem yapılamaz.");
+         }
+         */
 
-        // 3. Aktif Süreci ve Görevi Bul
+
         String processInstanceId = cargo.getProcessInstanceId();
         if (processInstanceId == null) {
-            // Bu durum normalde olmamalı (eğer kargo PENDING değilse)
             log.error("Tutarsız durum: Kargo (ID: {}) PENDING değil ama processInstanceId null.", cargo.getId());
             throw new IllegalStateException("Kargo (Takip No: " + trackingNumber + ") için süreç ID'si bulunamadı, veri tutarsızlığı olabilir.");
         }
@@ -244,17 +239,15 @@ public class CargoServiceImpl implements CargoService {
             processInstance = runtimeService.createProcessInstanceQuery()
                     .processInstanceId(processInstanceId)
                     .active()
-                    .singleResult(); // Aktif süreç yoksa hata fırlatır
+                    .singleResult();
 
             activeTask = taskService.createTaskQuery()
                     .processInstanceId(processInstanceId)
                     .active()
-                    .singleResult(); // Aktif task yoksa hata fırlatır
+                    .singleResult();
 
         } catch (org.camunda.bpm.engine.exception.NullValueException | org.camunda.bpm.engine.exception.NotFoundException e) {
-            // Ya aktif süreç ya da aktif görev bulunamadı.
             log.warn("complete-step: Aktif süreç veya görev bulunamadı (PI ID: {}). Süreç bitmiş veya beklenmedik bir durumda olabilir.", processInstanceId, e);
-            // Kullanıcıya daha net bir mesaj verelim.
             throw new EntityNotFoundException("Bu kargo (Takip No: " + trackingNumber + ") için şu anda tamamlanacak aktif bir görev bulunmuyor veya süreç aktif değil.");
         } catch (ProcessEngineException pee) {
             log.error("complete-step: Aktif süreç veya görev sorgulanırken Camunda hatası (PI ID: {}): {}", processInstanceId, pee.getMessage(), pee);
@@ -267,26 +260,22 @@ public class CargoServiceImpl implements CargoService {
         log.info("Aktif görev bulundu: Task ID: {}, Task Key: {}, Process Definition ID: {}", taskId, taskDefinitionKey, processDefinitionId);
 
 
-        // 4. BPMN'den Ayarlanacak İlerleme Değişkenini Bul
         String variableNameToSet = null;
         try {
             BpmnModelInstance modelInstance = repositoryService.getBpmnModelInstance(processDefinitionId);
             if (modelInstance == null) {
-                // Bu durum Camunda'nın çalışmasında ciddi bir sorun olduğunu gösterir.
                 log.error("Kritik Hata: Process definition ID '{}' için BPMN modeli RepositoryService tarafından bulunamadı.", processDefinitionId);
                 throw new IllegalStateException("BPMN modeli bulunamadı: " + processDefinitionId);
             }
 
             UserTask userTaskElement = modelInstance.getModelElementById(taskDefinitionKey);
             if (userTaskElement == null) {
-                // Bu durum, deploy edilen BPMN ile çalışan instance arasında uyumsuzluk olduğunu gösterebilir.
                 log.error("Konfigürasyon Hatası: BPMN modelinde task definition key '{}' (ID: {}) bulunamadı.", taskDefinitionKey, processDefinitionId);
                 throw new IllegalStateException("BPMN modelinde görev tanımı bulunamadı: " + taskDefinitionKey);
             }
 
             ExtensionElements extensionElements = userTaskElement.getExtensionElements();
             if (extensionElements != null) {
-                // CamundaProperties listesini al
                 List<CamundaProperties> propertiesList = extensionElements.getElementsQuery()
                         .filterByType(CamundaProperties.class)
                         .list();
@@ -297,7 +286,6 @@ public class CargoServiceImpl implements CargoService {
                     }
                     CamundaProperties camundaProperties = propertiesList.get(0);
 
-                    // İlgili property'yi collection içinde ara
                     Collection<CamundaProperty> propsCollection = camundaProperties.getCamundaProperties();
                     Optional<CamundaProperty> nextStepVariableProp = propsCollection.stream()
                             .filter(prop -> NEXT_STEP_VARIABLE_PROPERTY_NAME.equals(prop.getCamundaName()))
@@ -307,12 +295,12 @@ public class CargoServiceImpl implements CargoService {
                         variableNameToSet = nextStepVariableProp.get().getCamundaValue();
                         if (variableNameToSet == null || variableNameToSet.isBlank()) {
                             log.warn("Task Key '{}' için '{}' property değeri BPMN'de boş tanımlanmış.", taskDefinitionKey, NEXT_STEP_VARIABLE_PROPERTY_NAME);
-                            variableNameToSet = null; // Boş değeri kullanma
+                            variableNameToSet = null;
                         } else {
                             log.info("BPMN'den bir sonraki adım için ayarlanacak değişken bulundu: '{}'", variableNameToSet);
                         }
                     } else {
-                        log.info("Task Key '{}' için <camunda:properties> içinde '{}' property bulunamadı (Muhtemelen son görev veya BPMN eksik).", taskDefinitionKey, NEXT_STEP_VARIABLE_PROPERTY_NAME);
+                        log.info("Task Key '{}' için '{}' property bulunmadı. Bu, sürecin sonuna yaklaşıldığını gösterebilir.", taskDefinitionKey, NEXT_STEP_VARIABLE_PROPERTY_NAME);
                     }
                 } else {
                     log.info("Task Key '{}' için <camunda:properties> elementi bulunamadı.", taskDefinitionKey);
@@ -322,50 +310,165 @@ public class CargoServiceImpl implements CargoService {
             }
 
         } catch (Exception e) {
-            // Model API kullanımı sırasında beklenmedik bir hata olursa
             log.error("BPMN modelinden '{}' property okunurken hata oluştu (Task Key: {}): {}",
                     NEXT_STEP_VARIABLE_PROPERTY_NAME, taskDefinitionKey, e.getMessage(), e);
-            // Bu, yapılandırma veya Camunda hatası olabilir, işlemi durdurmak mantıklı.
             throw new IllegalStateException("Süreç ilerleme değişkeni BPMN'den okunamadı: " + e.getMessage(), e);
         }
 
-        // 5. İlerleme Değişkenini Ayarla (Eğer bulunduysa)
         if (variableNameToSet != null) {
             try {
-                // setVariable idempotenttir, mevcut değeri kontrol etmeye gerek yok.
                 runtimeService.setVariable(processInstanceId, variableNameToSet, true);
                 log.info("Camunda süreci (ID: {}) için '{}' değişkeni 'true' olarak ayarlandı.", processInstanceId, variableNameToSet);
             } catch (ProcessEngineException e) {
                 log.error("Camunda süreci (ID: {}) ilerleme değişkeni ('{}') ayarlanırken hata: {}",
                         processInstanceId, variableNameToSet, e.getMessage(), e);
-                // Değişken ayarlanamazsa görev tamamlanmamalı.
                 throw new IllegalStateException("Süreç ilerleme onayı verilirken Camunda hatası: " + e.getMessage(), e);
             }
         } else {
             log.info("Bu görev ('{}') için ayarlanacak bir sonraki adım değişkeni bulunmadığından değişken ayarlanmadı.", taskDefinitionKey);
         }
 
-        // 6. User Task'ı Tamamla
         try {
             taskService.complete(taskId);
             log.info("Aktif görev (Task ID: {}) başarıyla tamamlandı. Sürecin ilerlemesi bekleniyor.", taskId);
-        } catch (ProcessEngineException e){ // Görev bulunamazsa, kilitliyse vb. hatalar
+        } catch (ProcessEngineException e){
             log.error("Görev (Task ID: {}) tamamlanırken Camunda hatası: {}", taskId, e.getMessage(), e);
-            // Bu durumda işlem başarısız olmuştur.
             throw new IllegalStateException("Görev (Task ID: " + taskId +") tamamlanamadı: " + e.getMessage(), e);
-        } catch (Exception e) { // Beklenmedik diğer hatalar
+        } catch (Exception e) {
             log.error("Görev (Task ID: {}) tamamlanırken beklenmedik hata: {}", taskId, e.getMessage(), e);
-            throw new RuntimeException("Görev tamamlanırken beklenmedik hata: " + e.getMessage(), e); // Genel RuntimeException
+            throw new RuntimeException("Görev tamamlanırken beklenmedik hata: " + e.getMessage(), e);
         }
-        // Durum güncellemesi, bu adımdan sonra tetiklenecek olan Service Task tarafından yapılacak.
     }
 
+    @Override
+    @Transactional(readOnly = true)
+    public TrackingInfoResponse getTrackingInfo(String trackingNumber) {
+        log.info("Takip numarası '{}' için kargo bilgisi sorgulanıyor.", trackingNumber);
+
+        Cargo cargo = cargoRepository.findByTrackingNumber(trackingNumber)
+                .orElseThrow(() -> {
+                    log.warn("Takip numarası '{}' ile kargo bulunamadı.", trackingNumber);
+                    return new EntityNotFoundException("Takip numarası ile kargo bulunamadı: " + trackingNumber);
+                });
+
+        log.debug("Kargo bulundu: ID={}, Durum={}, PI_ID={}", cargo.getId(), cargo.getCurrentStatus(), cargo.getProcessInstanceId());
+
+        List<TrackingHistoryEvent> historyEvents = List.of();
+        if (cargo.getProcessInstanceId() != null) {
+            try {
+                // --- DÜZELTME: activityIdIn yerine activityType ile çekip Java'da filtrele ---
+                List<HistoricActivityInstance> activityInstances = historyService.createHistoricActivityInstanceQuery()
+                        .processInstanceId(cargo.getProcessInstanceId())
+                        // Sadece ilgilendiğimiz türdeki aktiviteleri al (Service Task'lar)
+                        .activityType("serviceTask")
+                        .orderByHistoricActivityInstanceStartTime().asc()
+                        .list();
+
+                log.debug("Takip numarası '{}' için {} adet Service Task geçmiş aktivitesi bulundu (Filtrelemeden önce).", trackingNumber, activityInstances.size());
+
+                // Şimdi Java Stream API kullanarak sadece istediğimiz ID'leri filtrele
+                historyEvents = activityInstances.stream()
+                        .filter(activity -> TRACKING_ACTIVITY_IDS.contains(activity.getActivityId()))
+                        .map(activity -> {
+                            String activityName = activity.getActivityName() != null ? activity.getActivityName() : "Bilinmeyen Aktivite";
+                            String statusDesc = extractStatusFromActivityName(activityName);
+                            String location = extractLocationFromActivityName(activityName);
+                            LocalDateTime timestamp = convertDateToLocalDateTime(activity.getStartTime()); // Aktivitenin başlangıç zamanı
+
+                            return new TrackingHistoryEvent(timestamp, statusDesc, location);
+                        })
+                        // .sorted(Comparator.comparing(TrackingHistoryEvent::getTimestamp)) // Zaten query'de sıralı geliyor
+                        .collect(Collectors.toList());
+
+                log.debug("Takip numarası '{}' için {} adet ilgili geçmiş aktivite bulundu (Filtrelemeden SONRA).", trackingNumber, historyEvents.size());
+                // ------------------------------------------------------------------------
+
+            } catch (Exception e) {
+                log.error("Takip numarası '{}', PI_ID '{}' için Camunda geçmişi alınırken hata: {}",
+                        trackingNumber, cargo.getProcessInstanceId(), e.getMessage(), e);
+                // Hata olsa bile devam et, en azından temel bilgileri gösteririz.
+            }
+        } else {
+            log.warn("Takip numarası '{}' için süreç ID'si bulunamadığından geçmiş bilgisi alınamadı.", trackingNumber);
+        }
+
+        return TrackingInfoResponse.builder()
+                .trackingNumber(cargo.getTrackingNumber())
+                .currentStatus(getStatusDisplayName(cargo.getCurrentStatus()))
+                .currentStatusBadgeClass(getStatusBadgeClass(cargo.getCurrentStatus()))
+                .senderCity(cargo.getSenderCity())
+                .receiverCity(cargo.getReceiverCity())
+                .processInstanceId(cargo.getProcessInstanceId())
+                .historyEvents(historyEvents)
+                .found(true)
+                .build();
+    }
+
+    // --- Yardımcı Metotlar ---
+
+    private String extractStatusFromActivityName(String activityName) {
+        if (activityName == null) return "Bilinmeyen Durum";
+        if (activityName.contains(":")) {
+            return activityName.substring(activityName.indexOf(":") + 1).trim();
+        }
+        if (activityName.startsWith("Tamamla:")) {
+            return activityName.substring(activityName.indexOf(":") + 1).trim() + " Tamamlandı";
+        }
+        return activityName;
+    }
+
+    private String extractLocationFromActivityName(String activityName) {
+        if (activityName != null) {
+            if (activityName.contains("Transfer Merkezi")) return "Transfer Merkezi";
+            if (activityName.contains("Dağıtım Bölgesi")) return "Dağıtım Bölgesi";
+            if (activityName.contains("İlk Araca Yüklendi")) return "Kalkış Noktası";
+            if (activityName.contains("Son Araca Yüklendi")) return "Transfer Noktası";
+            if (activityName.contains("Dağıtımda")) return "Varış Bölgesi";
+            if (activityName.contains("Teslim Edildi")) return "Teslimat Adresi";
+            if (activityName.contains("Kargo Alındı")) return "Gönderici Şube";
+            if (activityName.contains("İptal Edildi")) return "İşlem Merkezi";
+        }
+        return "-";
+    }
+
+    private LocalDateTime convertDateToLocalDateTime(Date date) {
+        return date == null ? null : date.toInstant()
+                .atZone(ZoneId.systemDefault())
+                .toLocalDateTime();
+    }
+
+    private String getStatusDisplayName(CargoStatus status) {
+        if (status == null) return "Bilinmiyor";
+        return switch (status) {
+            case PENDING -> "Beklemede";
+            case RECEIVED -> "Kargo Alındı";
+            case LOADED_ON_VEHICLE_1 -> "İlk Araca Yüklendi";
+            case AT_TRANSFER_CENTER -> "Transfer Merkezinde";
+            case LOADED_ON_VEHICLE_2 -> "Son Araca Yüklendi";
+            case AT_DISTRIBUTION_HUB -> "Dağıtım Bölgesinde";
+            case OUT_FOR_DELIVERY -> "Dağıtımda";
+            case DELIVERED -> "Teslim Edildi";
+            case CANCELLED -> "İptal Edildi";
+            default -> status.name();
+        };
+    }
+
+    private String getStatusBadgeClass(CargoStatus status) {
+        if (status == null) return "bg-secondary";
+        return switch (status) {
+            case PENDING, RECEIVED -> "bg-secondary";
+            case LOADED_ON_VEHICLE_1, AT_TRANSFER_CENTER, LOADED_ON_VEHICLE_2, AT_DISTRIBUTION_HUB -> "bg-primary";
+            case OUT_FOR_DELIVERY -> "bg-info";
+            case DELIVERED -> "bg-success";
+            case CANCELLED -> "bg-danger";
+            default -> "bg-dark";
+        };
+    }
 
     private String generateUniqueTrackingNumber() {
-        // Basit ve kısa bir takip numarası üretimi
         for (int i = 0; i < MAX_TRACKING_NUMBER_ATTEMPTS; i++) {
-            String prefix = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyMMddHH")); // Saat dahil
-            long randomSuffix = ThreadLocalRandom.current().nextLong(10000, 100000); // 5 haneli
+            String prefix = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyMMddHH"));
+            long randomSuffix = ThreadLocalRandom.current().nextLong(10000, 100000);
             String trackingNumber = prefix + randomSuffix;
 
             if (!cargoRepository.existsByTrackingNumber(trackingNumber)) {
@@ -373,8 +476,6 @@ public class CargoServiceImpl implements CargoService {
                 return trackingNumber;
             }
             log.warn("Takip numarası çakışması: {}. Deneme: {}/{}", trackingNumber, i + 1, MAX_TRACKING_NUMBER_ATTEMPTS);
-            // Kısa bekleme eklenebilir ama genellikle gereksiz
-            // try { Thread.sleep(1); } catch (InterruptedException ignored) {}
         }
         log.error("{} denemede benzersiz takip numarası üretilemedi.", MAX_TRACKING_NUMBER_ATTEMPTS);
         throw new TrackingNumberGenerationException("Benzersiz takip numarası " + MAX_TRACKING_NUMBER_ATTEMPTS + " denemede üretilemedi.");

@@ -1,8 +1,8 @@
 package com.ozansoyak.cargo_process_tracking.service;
 
-// ApproveNextStepRequest importu kaldırıldı
 import com.ozansoyak.cargo_process_tracking.dto.CreateCargoRequest;
 import com.ozansoyak.cargo_process_tracking.dto.CargoResponse;
+import com.ozansoyak.cargo_process_tracking.dto.TrackingInfoResponse; // Eklendi
 import jakarta.persistence.EntityNotFoundException;
 
 public interface CargoService {
@@ -11,18 +11,15 @@ public interface CargoService {
 
     void cancelCargoProcess(String trackingNumber);
 
+    void completeUserTaskAndPrepareNextStep(String trackingNumber);
+
     /**
-     * Belirtilen takip numarasına ait süreçteki mevcut aktif kullanıcı görevini tamamlar
-     * ve bir sonraki adıma geçiş için gerekli koşulu ayarlar.
+     * Belirtilen takip numarasına ait kargonun güncel durumunu ve
+     * süreç geçmişini getirir.
      *
-     * @param trackingNumber Süreci ilerletilecek kargonun takip numarası.
+     * @param trackingNumber Sorgulanacak kargonun takip numarası.
+     * @return Kargo takip bilgilerini içeren DTO.
      * @throws EntityNotFoundException Kargo bulunamazsa.
-     * @throws IllegalStateException Süreç aktif değilse veya beklenmedik bir durumdaysa.
-     * @throws IllegalArgumentException Tamamlanan göreve göre bir sonraki adım belirlenemezse.
      */
-    void completeUserTaskAndPrepareNextStep(String trackingNumber); // Yeni metot
-
-    // approveNextStep METODU KALDIRILDI
-
-    // TrackingInfoResponse getTrackingInfo(String trackingNumber);
+    TrackingInfoResponse getTrackingInfo(String trackingNumber); // Yeni metot eklendi
 }
