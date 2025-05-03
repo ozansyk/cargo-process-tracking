@@ -5,65 +5,102 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Personel Giriş</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
-    <!-- Bootstrap Icons (Eğer ikon kullanacaksak) -->
+    <!-- Bootstrap Icons -->
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
     <style>
-        html, body { height: 100%; }
-        body { display: flex; align-items: center; padding-top: 40px; padding-bottom: 40px; background-color: #f8f9fa; }
-        /* Ana container'ı ortalayalım ve dikey hizalama için flex kullanalım */
-        .container {
-            display: flex;
-            flex-direction: column; /* İçeriği dikey yığ */
-            justify-content: center; /* Dikeyde ortala */
-            align-items: center; /* Yatayda ortala */
-            min-height: calc(100vh - 80px); /* Navbar boşluğunu düş */
-            width: 100%;
+        html, body {
+            height: 100%;
         }
+
+        body {
+            display: flex; /* İçeriği dikeyde ortalamak için */
+            align-items: center; /* Dikey ortalama */
+            justify-content: center; /* Yatay ortalama (text-center ile birlikte) */
+            padding-top: 40px;
+            padding-bottom: 40px;
+            background-color: #f8f9fa;
+        }
+
+        .form-signin-wrapper {
+            /* Body flex yaptığı için, bu wrapper içeriği toparlar */
+            width: 100%;
+            max-width: 380px; /* Form genişliğini ayarla */
+        }
+
         .form-signin {
-            max-width: 380px;
-            width: 100%; /* Mobil için tam genişlik */
+            /* Max-width wrapper'dan geliyor, burada sadece padding vb. */
             padding: 2rem;
             background-color: #fff;
             border-radius: 0.5rem;
             box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.1);
-            margin-bottom: 2rem; /* Altına boşluk */
+            margin-bottom: 1.5rem; /* Altına boşluk */
         }
-        .form-signin .form-floating:focus-within { z-index: 2; }
-        .form-signin .form-floating { margin-bottom: 1rem; }
-        .form-signin input[type="password"] { margin-bottom: 1.5rem; }
-        .alert { margin-top: 1rem; }
+
+        .form-signin .form-floating:focus-within {
+            z-index: 2;
+        }
+
+        .form-signin .form-floating {
+            margin-bottom: 1rem;
+        }
+
+        .form-signin input[type="password"] {
+            margin-bottom: 1.5rem; /* Giriş yap butonu ile arasına boşluk */
+        }
+
+        .alert {
+            margin-top: 1rem;
+            margin-bottom: 1rem; /* Hata mesajı sonrası boşluk */
+            text-align: left; /* Hata mesajı sola dayalı olsun */
+            font-size: 0.9em; /* Biraz küçültelim */
+            padding: 0.75rem 1rem;
+        }
+
         .track-link {
-            margin-top: 1.5rem;
-            display: block; /* Linki blok element yap */
+            display: block; /* Tam satır kaplasın */
+            margin-top: 1rem; /* Butondan sonra boşluk */
+            padding: 0.5rem; /* Tıklama alanı */
+            font-size: 0.9em;
             color: #6c757d;
             text-decoration: none;
+            border-radius: 0.25rem; /* Hafif köşe yuvarlama */
+            transition: background-color 0.2s ease-in-out;
         }
+
         .track-link:hover {
-            text-decoration: underline;
+            text-decoration: none;
+            background-color: #e9ecef; /* Üzerine gelince hafif arka plan */
             color: #0d6efd;
         }
+
         .footer-text {
             color: #6c757d;
             font-size: 0.9em;
-            margin-top: 3rem; /* Linkten sonra biraz boşluk */
+            margin-top: 2rem; /* Formdan sonra biraz boşluk */
         }
     </style>
 </head>
 <body class="text-center">
 
-<!-- Ana Container -->
-<div class="container">
-    <!-- Form Alanı -->
+<!-- Formu ve footer'ı saran ana wrapper -->
+<div class="form-signin-wrapper">
+
     <main class="form-signin">
         <form th:action="@{/login}" method="post">
             <h1 class="h3 mb-4 fw-normal">Personel Girişi</h1>
 
-            <div th:if="${errorMessage}" class="alert alert-danger py-2" role="alert">
+            <!-- Hata Mesajı Alanı -->
+            <div th:if="${errorMessage}" class="alert alert-danger d-flex align-items-center py-2" role="alert">
+                <i class="bi bi-exclamation-triangle-fill me-2"></i> <!-- İkon eklendi -->
                 <span th:text="${errorMessage}">Geçersiz kullanıcı adı veya şifre!</span>
             </div>
-            <div th:if="${logoutMessage}" class="alert alert-success py-2" role="alert">
+
+            <!-- Çıkış Mesajı Alanı -->
+            <div th:if="${logoutMessage}" class="alert alert-success d-flex align-items-center py-2" role="alert">
+                <i class="bi bi-check-circle-fill me-2"></i> <!-- İkon eklendi -->
                 <span th:text="${logoutMessage}">Başarıyla çıkış yaptınız.</span>
             </div>
+
 
             <div class="form-floating">
                 <input type="email" class="form-control" id="floatingInput" name="email" placeholder="E-posta Adresi" required autofocus>
@@ -76,21 +113,19 @@
 
             <button class="w-100 btn btn-lg btn-primary" type="submit">Giriş Yap</button>
 
-            <!-- YENİ EKLENEN KISIM: Kargo Takip Linki -->
+            <!-- Kargo Takip Linki (Formun içinde ama butonun altında) -->
             <a th:href="@{/track}" class="track-link">
                 <i class="bi bi-box-seam me-1"></i> Kargonuzu mu takip etmek istiyorsunuz?
             </a>
-            <!-- ----------------------------------- -->
 
         </form>
     </main>
 
-    <!-- Footer Alanı -->
+    <!-- Footer (Wrapper'ın içinde ama main'in dışında) -->
     <p class="footer-text">© Kargo Firması 2025</p>
 
-</div> <!-- container sonu -->
+</div> <!-- form-signin-wrapper sonu -->
 
-<!-- Footer -->
 <footer class="text-center">
     <p>© 2025 Kargo Takip Sistemi</p>
     <p>Ozan SOYAK</p>

@@ -7,7 +7,6 @@
     <title>Personel Paneli</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css">
-    <!-- Önceki style bloğu aynı kalabilir -->
     <style>
         :root { --navbar-height: 56px; --sidebar-width: 240px; }
         body { padding-top: var(--navbar-height); overflow-x: hidden; }
@@ -25,12 +24,13 @@
         .card { border: none; border-radius: .5rem; }
         .card-title { font-size: 0.9rem; margin-bottom: 0.25rem; opacity: 0.9; }
         .card-text { margin-bottom: 0; }
-        .table-sm th, .table-sm td { padding: 0.4rem; } /* Tablo içeriğini biraz sıkıştır */
+        .table-sm th, .table-sm td { padding: 0.4rem; }
+        .badge { padding: 0.4em 0.6em; font-size: 0.9em; } /* Badge için stil */
     </style>
 </head>
 <body>
 
-<!-- Sabit Üst Navbar (Önceki gibi) -->
+<!-- Sabit Üst Navbar -->
 <nav class="navbar navbar-expand-md navbar-dark fixed-top bg-dark">
     <div class="container-fluid">
         <a class="navbar-brand" th:href="@{/panel}">Kargo Takip Sistemi</a>
@@ -51,7 +51,7 @@
 
 <div class="container-fluid">
     <div class="row">
-        <!-- Kenar Çubuğu (Sidebar - Önceki gibi, linkler dinamik) -->
+        <!-- Kenar Çubuğu (Sidebar) -->
         <nav id="sidebarMenu" class="col-md-3 col-lg-2 d-md-block sidebar collapse bg-light">
             <div class="position-sticky">
                 <ul class="nav flex-column pt-2">
@@ -103,24 +103,33 @@
         <main class="main-content">
             <h1 class="h2 border-bottom pb-2 mb-3">Ana Panel</h1>
 
-            <!-- Hata Mesajı (Panel verileri yüklenemezse) -->
             <div th:if="${panelError}" class="alert alert-warning" role="alert" th:text="${panelError}">
                 Panel verileri yüklenemedi.
             </div>
 
-            <!-- Hızlı Bakış Widget'ları (Dinamik Veriler) -->
-            <!-- panelData null değilse göster -->
-            <div th:if="${panelData}" class="row row-cols-1 row-cols-sm-2 row-cols-lg-4 g-4 mb-4">
+            <!-- Hızlı Bakış Widget'ları -->
+            <!-- row-cols-lg-4 yerine row-cols-lg-5 yapalım (veya ihtiyaca göre ayarlayalım) -->
+            <div th:if="${panelData}" class="row row-cols-1 row-cols-sm-2 row-cols-lg-5 g-4 mb-4">
                 <div class="col">
-                    <div class="card text-dark bg-secondary bg-opacity-50 shadow-sm h-100"> <!-- Bekleyenler için renk -->
+                    <div class="card text-dark bg-secondary bg-opacity-50 shadow-sm h-100">
                         <div class="card-body">
                             <h5 class="card-title">Bekleyen/Alınan</h5>
                             <p class="card-text fs-2 fw-bold" th:text="${panelData.beklemedeAlinanCount}">0</p>
                         </div>
                     </div>
                 </div>
+                <!-- YENİ WIDGET: Taşınıyor/Transferde -->
                 <div class="col">
-                    <div class="card text-dark bg-info bg-opacity-75 shadow-sm h-100"> <!-- Dağıtımdakiler için renk -->
+                    <div class="card text-white bg-primary shadow-sm h-100"> <!-- Renk olarak primary seçtim -->
+                        <div class="card-body">
+                            <h5 class="card-title">Taşınıyor/Transferde</h5>
+                            <p class="card-text fs-2 fw-bold" th:text="${panelData.tasiniyorTransferdeCount}">0</p>
+                        </div>
+                    </div>
+                </div>
+                <!-- ------------------------------ -->
+                <div class="col">
+                    <div class="card text-dark bg-info bg-opacity-75 shadow-sm h-100">
                         <div class="card-body">
                             <h5 class="card-title">Dağıtımdakiler</h5>
                             <p class="card-text fs-2 fw-bold" th:text="${panelData.dagitimdaCount}">0</p>
@@ -138,16 +147,15 @@
                 <div class="col">
                     <div class="card text-white bg-danger shadow-sm h-100">
                         <div class="card-body">
-                            <h5 class="card-title">İptal Edilenler</h5> <!-- İsim değişti -->
+                            <h5 class="card-title">İptal Edilenler</h5>
                             <p class="card-text fs-2 fw-bold" th:text="${panelData.iptalEdilenCount}">0</p>
                         </div>
                     </div>
                 </div>
             </div>
 
-            <!-- Son İşlemler Tablosu -->
+            <!-- Son İşlemler Tablosu (Aynı kalır) -->
             <h2 class="mt-4">Son İşlemler</h2>
-            <!-- panelData ve recentActivities null/boş değilse tabloyu göster -->
             <div th:if="${panelData != null and panelData.recentActivities != null and not #lists.isEmpty(panelData.recentActivities)}" class="table-responsive">
                 <table class="table table-striped table-hover table-sm align-middle">
                     <thead>
@@ -155,7 +163,6 @@
                         <th scope="col">Takip No</th>
                         <th scope="col">Durum</th>
                         <th scope="col">Tarih</th>
-                        <!-- <th scope="col">İşlemi Yapan</th> --> <!-- Şimdilik kapalı -->
                     </tr>
                     </thead>
                     <tbody>
@@ -166,12 +173,10 @@
                                   th:text="${activity.statusDescription}">Durum</span>
                         </td>
                         <td th:text="${activity.timestamp != null ? #temporals.format(activity.timestamp, 'dd.MM.yyyy HH:mm') : '-'}">17.10.2023 14:50</td>
-                        <!-- <td th:text="${activity.performedBy}">Mehmet Y.</td> -->
                     </tr>
                     </tbody>
                 </table>
             </div>
-            <!-- Eğer recentActivities listesi boşsa mesaj göster -->
             <div th:if="${panelData != null and (panelData.recentActivities == null or #lists.isEmpty(panelData.recentActivities))}" class="alert alert-light mt-3" role="alert">
                 Gösterilecek son işlem bulunmamaktadır.
             </div>
