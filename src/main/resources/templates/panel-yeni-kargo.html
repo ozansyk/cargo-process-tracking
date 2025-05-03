@@ -4,10 +4,9 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Personel Paneli - Yeni Kargo</title> <!-- Başlık güncellendi -->
+    <title>Personel Paneli - Yeni Kargo</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css">
-    <!-- Ortak Stiller (panel.html'den kopyalandı) -->
     <style>
         :root { --navbar-height: 56px; --sidebar-width: 240px; }
         body { padding-top: var(--navbar-height); overflow-x: hidden; background-color: #f8f9fa; }
@@ -22,14 +21,22 @@
         @media (max-width: 767.98px) { .main-content { width: 100%; margin-left: 0; } }
         .navbar { z-index: 1030; box-shadow: 0 0.125rem 0.25rem rgba(0,0,0,.075); }
         .navbar-brand { font-weight: 600; }
-        /* Form stilleri */
         .form-label { font-weight: 500; }
         .form-select { background-position: right 0.75rem center; }
+        .was-validated .form-control:invalid ~ .invalid-feedback,
+        .was-validated .form-select:invalid ~ .invalid-feedback { display: block; }
+        .was-validated .form-check-input:invalid ~ .form-check-label { color: var(--bs-form-invalid-color); }
+        .was-validated .form-check-input:invalid ~ .invalid-feedback { display: block; }
+        /* Modal ortalama */
+        .modal-dialog { display: flex; align-items: center; min-height: calc(100% - 1rem); }
+        @media (min-width: 576px) { .modal-dialog { min-height: calc(100% - 3.5rem); } }
+        /* Modal ikon */
+        .modal-icon { font-size: 3rem; }
     </style>
 </head>
 <body>
 
-<!-- Sabit Üst Navbar (panel.html ile aynı) -->
+<!-- Sabit Üst Navbar -->
 <nav class="navbar navbar-expand-md navbar-dark fixed-top bg-dark">
     <div class="container-fluid">
         <a class="navbar-brand" th:href="@{/panel}">Kargo Takip Sistemi</a>
@@ -38,9 +45,7 @@
         </button>
         <div class="d-flex align-items-center">
             <span class="navbar-text text-white me-3 d-none d-md-inline"
-                  th:text="|Hoşgeldin, ${username} [${userRoles}]|">
-                Hoşgeldin Kullanıcı [Rol]
-            </span>
+                  th:text="|Hoşgeldin, ${username} [${userRoles}]|"></span>
             <form th:action="@{/logout}" method="post" class="d-inline">
                 <button class="btn btn-outline-light btn-sm" type="submit">Çıkış Yap</button>
             </form>
@@ -50,49 +55,22 @@
 
 <div class="container-fluid">
     <div class="row">
-        <!-- Kenar Çubuğu (Sidebar - panel.html ile aynı, aktiflik farklı) -->
+        <!-- Kenar Çubuğu (Sidebar) -->
         <nav id="sidebarMenu" class="col-md-3 col-lg-2 d-md-block sidebar collapse bg-light">
             <div class="position-sticky">
                 <ul class="nav flex-column pt-2">
-                    <li class="nav-item">
-                        <a class="nav-link" th:href="@{/panel}"> <!-- Active değil -->
-                            <i class="bi bi-house-door"></i> Ana Panel
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <!-- Bu sayfa aktif -->
-                        <a class="nav-link active" aria-current="page" th:href="@{/panel/yeni-kargo}">
-                            <i class="bi bi-box-seam"></i> Yeni Kargo Kaydı
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" th:href="@{/panel/sorgula}">
-                            <i class="bi bi-search"></i> Kargo Sorgula
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="#">
-                            <i class="bi bi-file-earmark-bar-graph"></i> Raporlar
-                        </a>
-                    </li>
-                    <li class="nav-item" sec:authorize="hasRole('ADMIN')">
-                        <a class="nav-link" th:href="@{/panel/kullanici-yonetimi}">
-                            <i class="bi bi-people"></i> Kullanıcı Yönetimi
-                        </a>
-                    </li>
+                    <li class="nav-item"> <a class="nav-link" th:href="@{/panel}"> <i class="bi bi-house-door"></i> Ana Panel </a> </li>
+                    <li class="nav-item"> <a class="nav-link active" aria-current="page" th:href="@{/panel/yeni-kargo}"> <i class="bi bi-box-seam"></i> Yeni Kargo Kaydı </a> </li>
+                    <li class="nav-item"> <a class="nav-link" th:href="@{/panel/sorgula}"> <i class="bi bi-search"></i> Kargo Sorgula </a> </li>
+                    <li class="nav-item"> <a class="nav-link" href="#"> <i class="bi bi-file-earmark-bar-graph"></i> Raporlar </a> </li>
+                    <li class="nav-item" sec:authorize="hasRole('ADMIN')"> <a class="nav-link" th:href="@{/panel/kullanici-yonetimi}"> <i class="bi bi-people"></i> Kullanıcı Yönetimi </a> </li>
                 </ul>
-                <h6 class="sidebar-heading d-flex justify-content-between align-items-center px-3 mt-4 mb-1 text-muted text-uppercase">
-                    <span>Hesabım</span>
-                </h6>
+                <h6 class="sidebar-heading d-flex justify-content-between align-items-center px-3 mt-4 mb-1 text-muted text-uppercase"> <span>Hesabım</span> </h6>
                 <ul class="nav flex-column mb-2">
-                    <li class="nav-item">
-                        <a class="nav-link" href="#"> <i class="bi bi-person-circle"></i> Profilim </a>
-                    </li>
+                    <li class="nav-item"> <a class="nav-link" href="#"> <i class="bi bi-person-circle"></i> Profilim </a> </li>
                     <li class="nav-item">
                         <form th:action="@{/logout}" method="post" class="d-inline">
-                            <button class="nav-link text-start w-100 btn btn-link" type="submit" style="border:none; padding: .6rem 1.2rem;">
-                                <i class="bi bi-box-arrow-right"></i> Çıkış Yap
-                            </button>
+                            <button class="nav-link text-start w-100 btn btn-link" type="submit" style="border:none; padding: .6rem 1.2rem;"> <i class="bi bi-box-arrow-right"></i> Çıkış Yap </button>
                         </form>
                     </li>
                 </ul>
@@ -101,22 +79,18 @@
 
         <!-- Ana İçerik Alanı -->
         <main class="main-content">
-            <!-- Burası panel-yeni-kargo.html'in özel içeriği -->
             <div class="py-3 text-center">
                 <h2 class="border-bottom pb-2 mb-3">Yeni Kargo Kayıt Formu</h2>
                 <p class="lead">Lütfen gönderici, alıcı ve kargo bilgilerini eksiksiz giriniz.</p>
             </div>
 
             <form class="needs-validation" novalidate method="post" th:action="@{/panel/yeni-kargo}" th:object="${createCargoRequest}">
-                <div th:if="${successMessage}" class="alert alert-success" role="alert">
-                    <span th:text="${successMessage}">Kayıt başarılı!</span>
-                    <strong th:if="${trackingNumber}" th:text="${' Takip Numarası: ' + trackingNumber}"></strong>
-                </div>
-                <div th:if="${formError}" class="alert alert-danger" role="alert" th:text="${formError}">
-                    Form kaydedilirken bir hata oluştu.
-                </div>
+                <!-- Başarı mesajı alert'i kaldırıldı -->
+                <!-- Genel Hata Mesajı -->
+                <div th:if="${formError}" class="alert alert-danger" role="alert" th:text="${formError}"></div>
+                <!-- Global Validation Hataları -->
                 <div th:if="${#fields.hasGlobalErrors()}" class="alert alert-danger" role="alert">
-                    <p th:each="err : ${#fields.globalErrors()}" th:text="${err}">Global Hata</p>
+                    <ul> <li th:each="err : ${#fields.globalErrors()}" th:text="${err}"></li> </ul>
                 </div>
 
                 <div class="row g-5">
@@ -126,28 +100,28 @@
                         <div class="row g-3">
                             <div class="col-12">
                                 <label for="senderName" class="form-label">Ad Soyad / Firma Adı</label>
-                                <input type="text" class="form-control" id="senderName" placeholder="" th:field="*{senderName}" required>
-                                <div class="invalid-feedback" th:if="${#fields.hasErrors('senderName')}" th:errors="*{senderName}"> Gönderici adı gerekli. </div>
+                                <input type="text" class="form-control" th:errorclass="is-invalid" id="senderName" th:field="*{senderName}" required>
+                                <div class="invalid-feedback" th:if="${#fields.hasErrors('senderName')}" th:errors="*{senderName}"></div>
                             </div>
                             <div class="col-12">
                                 <label for="senderAddress" class="form-label">Adres</label>
-                                <textarea class="form-control" id="senderAddress" rows="3" th:field="*{senderAddress}" required></textarea>
-                                <div class="invalid-feedback" th:if="${#fields.hasErrors('senderAddress')}" th:errors="*{senderAddress}"> Adres gerekli. </div>
+                                <textarea class="form-control" th:errorclass="is-invalid" id="senderAddress" rows="3" th:field="*{senderAddress}" required></textarea>
+                                <div class="invalid-feedback" th:if="${#fields.hasErrors('senderAddress')}" th:errors="*{senderAddress}"></div>
                             </div>
                             <div class="col-md-6">
                                 <label for="senderCity" class="form-label">Şehir</label>
-                                <input type="text" class="form-control" id="senderCity" placeholder="" th:field="*{senderCity}" required>
-                                <div class="invalid-feedback" th:if="${#fields.hasErrors('senderCity')}" th:errors="*{senderCity}"> Şehir gerekli. </div>
+                                <input type="text" class="form-control" th:errorclass="is-invalid" id="senderCity" th:field="*{senderCity}" required>
+                                <div class="invalid-feedback" th:if="${#fields.hasErrors('senderCity')}" th:errors="*{senderCity}"></div>
                             </div>
                             <div class="col-md-6">
                                 <label for="senderPhone" class="form-label">Telefon</label>
-                                <input type="tel" class="form-control" id="senderPhone" placeholder="" th:field="*{senderPhone}" required>
-                                <div class="invalid-feedback" th:if="${#fields.hasErrors('senderPhone')}" th:errors="*{senderPhone}"> Telefon gerekli. </div>
+                                <input type="tel" class="form-control" th:errorclass="is-invalid" id="senderPhone" th:field="*{senderPhone}" required>
+                                <div class="invalid-feedback" th:if="${#fields.hasErrors('senderPhone')}" th:errors="*{senderPhone}"></div>
                             </div>
                             <div class="col-12">
                                 <label for="senderEmail" class="form-label">E-posta <span class="text-muted">(Opsiyonel)</span></label>
-                                <input type="email" class="form-control" id="senderEmail" placeholder="isim@ornek.com" th:field="*{senderEmail}">
-                                <div class="text-danger small" th:if="${#fields.hasErrors('senderEmail')}" th:errors="*{senderEmail}"> Geçerli bir e-posta adresi girin. </div> <!-- Invalid-feedback yerine -->
+                                <input type="email" class="form-control" th:errorclass="is-invalid" id="senderEmail" placeholder="isim@ornek.com" th:field="*{senderEmail}">
+                                <div class="invalid-feedback" th:if="${#fields.hasErrors('senderEmail')}" th:errors="*{senderEmail}"></div>
                             </div>
                         </div>
                         <hr class="my-4">
@@ -155,18 +129,18 @@
                         <div class="row g-3">
                             <div class="col-md-4">
                                 <label for="weight" class="form-label">Ağırlık (kg)</label>
-                                <input type="number" step="0.1" class="form-control" id="weight" placeholder="" th:field="*{weight}" required>
-                                <div class="invalid-feedback" th:if="${#fields.hasErrors('weight')}" th:errors="*{weight}"> Ağırlık gerekli. </div>
+                                <input type="number" step="0.1" class="form-control" th:errorclass="is-invalid" id="weight" th:field="*{weight}" required>
+                                <div class="invalid-feedback" th:if="${#fields.hasErrors('weight')}" th:errors="*{weight}"></div>
                             </div>
                             <div class="col-md-8">
                                 <label for="dimensions" class="form-label">Boyutlar (EnxBoyxYük - cm)</label>
-                                <input type="text" class="form-control" id="dimensions" placeholder="Örn: 30x40x20" th:field="*{dimensions}">
-                                <div class="text-danger small" th:if="${#fields.hasErrors('dimensions')}" th:errors="*{dimensions}">Boyut bilgisi hatalı.</div>
+                                <input type="text" class="form-control" th:errorclass="is-invalid" id="dimensions" placeholder="Örn: 30x40x20" th:field="*{dimensions}">
+                                <div class="invalid-feedback" th:if="${#fields.hasErrors('dimensions')}" th:errors="*{dimensions}"></div>
                             </div>
                             <div class="col-12">
                                 <label for="contentDescription" class="form-label">İçerik Açıklaması</label>
-                                <input type="text" class="form-control" id="contentDescription" placeholder="" th:field="*{contentDescription}" required>
-                                <div class="invalid-feedback" th:if="${#fields.hasErrors('contentDescription')}" th:errors="*{contentDescription}"> İçerik açıklaması gerekli. </div>
+                                <input type="text" class="form-control" th:errorclass="is-invalid" id="contentDescription" th:field="*{contentDescription}" required>
+                                <div class="invalid-feedback" th:if="${#fields.hasErrors('contentDescription')}" th:errors="*{contentDescription}"></div>
                             </div>
                         </div>
                     </div>
@@ -177,28 +151,28 @@
                         <div class="row g-3">
                             <div class="col-12">
                                 <label for="receiverName" class="form-label">Ad Soyad / Firma Adı</label>
-                                <input type="text" class="form-control" id="receiverName" placeholder="" th:field="*{receiverName}" required>
-                                <div class="invalid-feedback" th:if="${#fields.hasErrors('receiverName')}" th:errors="*{receiverName}"> Alıcı adı gerekli. </div>
+                                <input type="text" class="form-control" th:errorclass="is-invalid" id="receiverName" th:field="*{receiverName}" required>
+                                <div class="invalid-feedback" th:if="${#fields.hasErrors('receiverName')}" th:errors="*{receiverName}"></div>
                             </div>
                             <div class="col-12">
                                 <label for="receiverAddress" class="form-label">Adres</label>
-                                <textarea class="form-control" id="receiverAddress" rows="3" th:field="*{receiverAddress}" required></textarea>
-                                <div class="invalid-feedback" th:if="${#fields.hasErrors('receiverAddress')}" th:errors="*{receiverAddress}"> Alıcı adresi gerekli. </div>
+                                <textarea class="form-control" th:errorclass="is-invalid" id="receiverAddress" rows="3" th:field="*{receiverAddress}" required></textarea>
+                                <div class="invalid-feedback" th:if="${#fields.hasErrors('receiverAddress')}" th:errors="*{receiverAddress}"></div>
                             </div>
                             <div class="col-md-6">
                                 <label for="receiverCity" class="form-label">Şehir</label>
-                                <input type="text" class="form-control" id="receiverCity" placeholder="" th:field="*{receiverCity}" required>
-                                <div class="invalid-feedback" th:if="${#fields.hasErrors('receiverCity')}" th:errors="*{receiverCity}"> Alıcı şehri gerekli. </div>
+                                <input type="text" class="form-control" th:errorclass="is-invalid" id="receiverCity" th:field="*{receiverCity}" required>
+                                <div class="invalid-feedback" th:if="${#fields.hasErrors('receiverCity')}" th:errors="*{receiverCity}"></div>
                             </div>
                             <div class="col-md-6">
                                 <label for="receiverPhone" class="form-label">Telefon</label>
-                                <input type="tel" class="form-control" id="receiverPhone" placeholder="" th:field="*{receiverPhone}" required>
-                                <div class="invalid-feedback" th:if="${#fields.hasErrors('receiverPhone')}" th:errors="*{receiverPhone}"> Alıcı telefonu gerekli. </div>
+                                <input type="tel" class="form-control" th:errorclass="is-invalid" id="receiverPhone" th:field="*{receiverPhone}" required>
+                                <div class="invalid-feedback" th:if="${#fields.hasErrors('receiverPhone')}" th:errors="*{receiverPhone}"></div>
                             </div>
                             <div class="col-12">
                                 <label for="receiverEmail" class="form-label">E-posta <span class="text-muted">(SMS/Eposta Bildirim için)</span></label>
-                                <input type="email" class="form-control" id="receiverEmail" placeholder="isim@ornek.com" th:field="*{receiverEmail}">
-                                <div class="text-danger small" th:if="${#fields.hasErrors('receiverEmail')}" th:errors="*{receiverEmail}"> Geçerli bir alıcı e-posta adresi girin. </div>
+                                <input type="email" class="form-control" th:errorclass="is-invalid" id="receiverEmail" placeholder="isim@ornek.com" th:field="*{receiverEmail}">
+                                <div class="invalid-feedback" th:if="${#fields.hasErrors('receiverEmail')}" th:errors="*{receiverEmail}"></div>
                             </div>
                         </div>
                     </div>
@@ -208,7 +182,6 @@
 
                 <button class="w-100 btn btn-primary btn-lg" type="submit">Kaydet ve Takip No Oluştur</button>
             </form>
-            <!-- panel-yeni-kargo.html özel içeriği sonu -->
         </main>
     </div>
 </div>
@@ -219,7 +192,35 @@
     <p>Ozan SOYAK</p>
 </footer>
 
-<!-- Ortak JS Dosyaları -->
+<!-- *** YENİ: Başarı Modalı *** -->
+<div class="modal fade" id="successModal" tabindex="-1" aria-labelledby="successModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered"> <!-- Dikey ortalama için -->
+        <div class="modal-content">
+            <div class="modal-header bg-success text-white">
+                <h1 class="modal-title fs-5" id="successModalLabel">
+                    <i class="bi bi-check-circle-fill me-2"></i> Başarılı!
+                </h1>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body text-center">
+                <p class="lead" th:if="${successMessage}" th:text="${successMessage}">Kargo başarıyla kaydedildi!</p>
+                <div th:if="${trackingNumber}">
+                    <p class="mb-1">Oluşturulan Takip Numarası:</p>
+                    <h4 class="fw-bold text-primary" th:text="${trackingNumber}"></h4>
+                    <small class="text-muted">(Bu numarayı müşterinizle paylaşabilirsiniz)</small>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Kapat</button>
+                <!-- Opsiyonel: Yeni kayıt butonu -->
+                <a th:href="@{/panel/yeni-kargo}" class="btn btn-primary">Yeni Kayıt</a>
+            </div>
+        </div>
+    </div>
+</div>
+<!-- *** Modal Sonu *** -->
+
+
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
 <!-- Bootstrap Validation Script -->
 <script>
@@ -237,5 +238,24 @@
         })
     })()
 </script>
+<!-- *** YENİ: Modal'ı Gösterme Scripti *** -->
+<script th:inline="javascript">
+    /*<![CDATA[*/
+    // Model'den gelen flag'i kontrol et
+    var showModal = /*[[${showSuccessModal}]]*/ false; // Thymeleaf değişkenini JS'e aktar
+
+    if (showModal) {
+        // Modal elementini seç
+        var successModalElement = document.getElementById('successModal');
+        if (successModalElement) {
+            // Bootstrap 5 Modal instance oluştur ve göster
+            var successModal = new bootstrap.Modal(successModalElement);
+            successModal.show();
+        }
+    }
+    /*]]>*/
+</script>
+<!-- ******************************** -->
+
 </body>
 </html>

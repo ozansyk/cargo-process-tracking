@@ -107,9 +107,11 @@ public class PanelController {
         try {
             CargoResponse response = cargoService.createCargoAndStartProcess(request);
             log.info("Yeni kargo başarıyla oluşturuldu. Takip No: {}", response.getTrackingNumber());
-            redirectAttributes.addFlashAttribute("successMessage", "Kargo başarıyla kaydedildi!");
-            redirectAttributes.addFlashAttribute("trackingNumber", response.getTrackingNumber());
-            return "redirect:/panel";
+            model.addAttribute("showSuccessModal", true); // Modal'ı tetiklemek için flag
+            model.addAttribute("successMessage", "Kargo başarıyla kaydedildi!");
+            model.addAttribute("trackingNumber", response.getTrackingNumber());
+            model.addAttribute("createCargoRequest", new CreateCargoRequest());
+            return "panel-yeni-kargo";
         } catch (Exception e) {
             log.error("Yeni kargo kaydedilirken hata oluştu: {}", e.getMessage(), e);
             model.addAttribute("formError", "Kargo kaydedilirken beklenmedik bir hata oluştu: " + e.getMessage());
