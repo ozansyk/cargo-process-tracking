@@ -43,7 +43,7 @@ public class CargoServiceImpl implements CargoService {
     private final RepositoryService repositoryService; // Model API için eklendi
     private final HistoryService historyService;
 
-    private static final String CAMUNDA_PROCESS_DEFINITION_KEY = "cargoTrackingProcessConditionalAndUserTaskAfterV2";
+    private static final String CAMUNDA_PROCESS_DEFINITION_KEY = "cargoTrackingProcessV2";
     private static final int MAX_TRACKING_NUMBER_ATTEMPTS = 10;
     private static final String NEXT_STEP_VARIABLE_PROPERTY_NAME = "nextStepVariable"; // User Task Extension Property adı
 

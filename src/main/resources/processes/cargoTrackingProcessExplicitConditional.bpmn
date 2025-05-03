@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <definitions xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:camunda="http://camunda.org/schema/1.0/bpmn" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:dc="http://www.omg.org/spec/DD/20100524/DC" xmlns:di="http://www.omg.org/spec/DD/20100524/DI" id="Definitions_1" targetNamespace="http://www.example.org/ExplicitConditionalUserTaskAfterCargoTrackingV2" exporter="Camunda Modeler" exporterVersion="5.34.0">
-  <process id="cargoTrackingProcessConditionalAndUserTaskAfterV2" name="Kargo Takip (Koşul + Servis Sonrası UserTask v2 - Son Task Yok)" isExecutable="true" camunda:historyTimeToLive="P30D">
+  <process id="cargoTrackingProcessV2" name="Kargo Takip (Koşul + Servis Sonrası UserTask v2 - Son Task Yok)" isExecutable="true" camunda:historyTimeToLive="P30D">
     <startEvent id="startEvent_CargoProcessStarted" name="Kargo Süreci Başladı">
       <outgoing>flow_to_UpdateStatusReceived</outgoing>
     </startEvent>
@@ -224,7 +224,7 @@
     </endEvent>
   </process>
   <bpmndi:BPMNDiagram id="BPMNDiagram_1">
-    <bpmndi:BPMNPlane id="BPMNPlane_1" bpmnElement="cargoTrackingProcessConditionalAndUserTaskAfterV2">
+    <bpmndi:BPMNPlane id="BPMNPlane_1" bpmnElement="cargoTrackingProcessV2">
       <bpmndi:BPMNShape id="BPMNShape_startEvent_CargoProcessStarted" bpmnElement="startEvent_CargoProcessStarted">
         <dc:Bounds x="170" y="102" width="36" height="36" />
         <bpmndi:BPMNLabel>
