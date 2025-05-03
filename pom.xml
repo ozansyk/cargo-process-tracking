@@ -125,6 +125,13 @@
 				<groupId>org.springframework.boot</groupId>
 				<artifactId>spring-boot-maven-plugin</artifactId>
 				<version>3.3.3</version>
+				<executions>  <!-- BU BLOĞU EKLE -->
+					<execution>
+						<goals>
+							<goal>repackage</goal> <!-- Çalıştırılabilir JAR oluşturmak için -->
+						</goals>
+					</execution>
+				</executions> <!-- BURAYA KADAR -->
 				<configuration>
 					<excludes>
 						<exclude>
