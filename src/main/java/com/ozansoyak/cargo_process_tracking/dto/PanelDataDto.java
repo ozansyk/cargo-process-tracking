@@ -6,14 +6,12 @@ import lombok.Data;
 import java.util.List;
 
 @Data
-@Builder // Builder ile oluşturmak kolaylık sağlar
+@Builder
 public class PanelDataDto {
-    // Widget verileri (İsimleri paneldeki widget başlıklarına uygun yapalım)
-    private long beklemedeAlinanCount; // Toplam Beklemede + Alınan
-    private long dagitimdaCount;       // Toplam Dağıtımda
-    private long teslimEdilenCount;    // Toplam Teslim Edilen
-    private long iptalEdilenCount;     // Toplam İptal Edilen
-
-    // Son işlemler listesi
+    private long beklemedeAlinanCount;
+    private long tasiniyorTransferdeCount; // YENİ ALAN
+    private long dagitimdaCount;
+    private long teslimEdilenCount;
+    private long iptalEdilenCount;
     private List<RecentActivityDto> recentActivities;
 }

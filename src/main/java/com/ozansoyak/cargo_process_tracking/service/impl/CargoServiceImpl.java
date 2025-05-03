@@ -357,84 +357,79 @@ public class CargoServiceImpl implements CargoService {
         long beklemedeAlinan = cargoRepository.countByCurrentStatusIn(
                 List.of(CargoStatus.PENDING, CargoStatus.RECEIVED)
         );
+
+        // --- YENİ: Taşınma/Transfer durumlarını belirle ve say ---
+        List<CargoStatus> tasinmaTransferDurumlari = List.of(
+                CargoStatus.LOADED_ON_VEHICLE_1,
+                CargoStatus.AT_TRANSFER_CENTER,
+                CargoStatus.LOADED_ON_VEHICLE_2,
+                CargoStatus.AT_DISTRIBUTION_HUB
+        );
+        long tasiniyorTransferde = cargoRepository.countByCurrentStatusIn(tasinmaTransferDurumlari);
+        // ---------------------------------------------------------
+
         long dagitimda = cargoRepository.countByCurrentStatus(CargoStatus.OUT_FOR_DELIVERY);
         long teslimEdilen = cargoRepository.countByCurrentStatus(CargoStatus.DELIVERED);
         long iptalEdilen = cargoRepository.countByCurrentStatus(CargoStatus.CANCELLED);
 
-        // 2. Son İşlemleri Camunda Geçmişinden Al
+        // 2. Son İşlemleri Camunda Geçmişinden Al (Bu kısım aynı kalır)
         List<RecentActivityDto> recentActivities = List.of();
         try {
-            // Son 10 bitmiş service task aktivitesini al
             List<HistoricActivityInstance> lastActivities = historyService.createHistoricActivityInstanceQuery()
                     .activityType("serviceTask")
                     .orderByHistoricActivityInstanceEndTime().desc()
                     .finished()
-                    // --- DÜZELTME 1: listPage kullanımı ---
-                    .listPage(0, 10); // İlk 10 sonuç
-
+                    .listPage(0, 10);
             log.debug("{} adet geçmiş bitmiş Service Task aktivitesi bulundu (Filtrelemeden önce).", lastActivities.size());
-
-            // Aktivite ID'lerine göre filtrele
             List<HistoricActivityInstance> filteredActivities = lastActivities.stream()
                     .filter(activity -> TRACKING_ACTIVITY_IDS.contains(activity.getActivityId()))
-                    .collect(Collectors.toList());
-
-            // --- DÜZELTME 2: Business Key'leri toplu al ---
+                    .toList();
             Set<String> processInstanceIds = filteredActivities.stream()
                     .map(HistoricActivityInstance::getProcessInstanceId)
                     .collect(Collectors.toSet());
-
-            // --- DÜZELTME 3: Map'i final yap ---
-            final Map<String, String> processIdToBusinessKeyMap; // final olarak bildir
+            final Map<String, String> processIdToBusinessKeyMap;
             if (!processInstanceIds.isEmpty()) {
                 List<HistoricProcessInstance> processInstances = historyService.createHistoricProcessInstanceQuery()
-                        .processInstanceIds(processInstanceIds) // Set ile sorgula
+                        .processInstanceIds(processInstanceIds)
                         .list();
                 processIdToBusinessKeyMap = processInstances.stream()
-                        .filter(pi -> pi.getBusinessKey() != null) // Business Key null olmayanları al
+                        .filter(pi -> pi.getBusinessKey() != null)
                         .collect(Collectors.toMap(
                                 HistoricProcessInstance::getId,
                                 HistoricProcessInstance::getBusinessKey,
-                                (key1, key2) -> key1 // Aynı ID gelirse ilkini koru (normalde olmaz)
+                                (key1, key2) -> key1
                         ));
                 log.debug("{} adet process instance için business key bulundu.", processIdToBusinessKeyMap.size());
             } else {
-                // processIdToBusinessKeyMap'e boş map ata
                 processIdToBusinessKeyMap = Collections.emptyMap();
             }
-            // -----------------------------------
-
             recentActivities = filteredActivities.stream()
                     .map(activity -> {
                         String activityName = activity.getActivityName() != null ? activity.getActivityName() : "Bilinmeyen İşlem";
                         String statusDesc = extractStatusFromActivityName(activityName);
                         LocalDateTime timestamp = convertDateToLocalDateTime(activity.getEndTime());
-
-                        // Lambda içinde artık final olan map'i kullanabiliriz
                         String trackingNo = processIdToBusinessKeyMap.getOrDefault(activity.getProcessInstanceId(), "-");
-
                         CargoStatus statusEnum = findStatusByActivityName(activityName);
                         String badgeClass = getStatusBadgeClass(statusEnum);
-
                         return new RecentActivityDto(trackingNo, statusDesc, badgeClass, timestamp);
                     })
                     .collect(Collectors.toList());
-
             log.debug("{} adet ilgili son işlem bulundu (Filtrelemeden SONRA).", recentActivities.size());
-
         } catch (Exception e) {
             log.error("Son işlemler alınırken Camunda geçmiş sorgusunda hata oluştu: {}", e.getMessage(), e);
         }
 
-        // 3. Panel DTO'sunu Oluştur ve Döndür
+        // 3. Panel DTO'sunu Oluştur ve Döndür (Yeni alanı ekle)
         return PanelDataDto.builder()
                 .beklemedeAlinanCount(beklemedeAlinan)
+                .tasiniyorTransferdeCount(tasiniyorTransferde) // YENİ
                 .dagitimdaCount(dagitimda)
                 .teslimEdilenCount(teslimEdilen)
                 .iptalEdilenCount(iptalEdilen)
                 .recentActivities(recentActivities)
                 .build();
     }
+
     // --- Yardımcı Metotlar (Sizin Kodunuzla Aynı) ---
 
     private CargoStatus findStatusByActivityName(String activityName) {
