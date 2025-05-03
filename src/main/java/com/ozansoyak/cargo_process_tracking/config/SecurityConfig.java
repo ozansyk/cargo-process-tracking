@@ -51,7 +51,7 @@ public class SecurityConfig {
                         // Kullanıcı Yönetimi sadece ADMIN rolüne sahip olanlar
                         .requestMatchers("/panel/kullanici-yonetimi").hasRole("ADMIN")
                         // Diğer tüm /panel altındaki yollar en azından giriş yapmış olmayı gerektirsin
-                        .requestMatchers("/panel/**").authenticated()
+                        .requestMatchers("/panel", "/panel/yeni-kargo", "/panel/sorgula").authenticated()
                         // ----------------------
                         // Diğer tüm istekler (yukarıdakilerle eşleşmeyen) kimlik doğrulaması gerektirsin
                         .anyRequest().authenticated()
