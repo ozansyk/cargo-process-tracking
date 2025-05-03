@@ -51,7 +51,6 @@
             background-color: #ffffff;
             border-radius: 0.5rem;
             box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
-            /* Thymeleaf th:if ile kontrol edilecek, başlangıçta gizli değil */
         }
         .tracking-results h3 {
             border-bottom: 1px solid #dee2e6;
@@ -67,6 +66,8 @@
             color: #6c757d;
             font-size: 0.9rem;
         }
+        /* Badge stilleri */
+        .badge { padding: 0.4em 0.6em; }
     </style>
 </head>
 <body>
@@ -74,17 +75,13 @@
 <!-- Üst Navigasyon Barı -->
 <nav class="navbar navbar-expand-md navbar-light bg-white fixed-top shadow-sm">
     <div class="container">
-        <!-- Ana sayfaya link (varsa) -->
-        <a class="navbar-brand fw-bold" th:href="@{/}">
-            KargoTakip
-        </a>
+        <a class="navbar-brand fw-bold" th:href="@{/}">KargoTakip</a>
         <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarCollapse" aria-controls="navbarCollapse" aria-expanded="false" aria-label="Toggle navigation">
             <span class="navbar-toggler-icon"></span>
         </button>
         <div class="collapse navbar-collapse" id="navbarCollapse">
             <ul class="navbar-nav ms-auto mb-2 mb-md-0">
                 <li class="nav-item">
-                    <!-- Personel Girişi sayfasına link -->
                     <a class="btn btn-outline-secondary" th:href="@{/login}">
                         <i class="bi bi-person-circle me-1"></i> Personel Girişi
                     </a>
@@ -101,12 +98,9 @@
     <section class="hero-section">
         <h1>Gönderinizi Takip Edin</h1>
         <p class="lead">Kargonuzun nerede olduğunu anında öğrenin.</p>
-
-        <!-- Thymeleaf Formu: action ve method sunucu tarafı için ayarlandı -->
         <form th:action="@{/track}" method="get" class="row g-3 justify-content-center tracking-form">
             <div class="col-sm-10 col-md-8 col-lg-6">
                 <label for="trackingNumberInput" class="visually-hidden">Takip Numarası</label>
-                <!-- name="trackingNumber" ve th:value eklendi -->
                 <input type="text" class="form-control form-control-lg" id="trackingNumberInput"
                        name="trackingNumber" placeholder="Takip Numaranızı Buraya Girin"
                        th:value="${submittedTrackingNumber}" required>
@@ -119,13 +113,13 @@
         </form>
     </section>
 
-    <!-- Hata Mesajı Alanı (Thymeleaf ile kontrol) -->
+    <!-- Hata Mesajı Alanı -->
     <div th:if="${errorMessage}" class="alert alert-danger d-flex align-items-center mt-3" role="alert">
         <i class="bi bi-exclamation-triangle-fill me-2"></i>
         <div th:text="${errorMessage}">Hata mesajı burada görünecek</div>
     </div>
 
-    <!-- Sorgulama Sonuçları Alanı (Thymeleaf ile kontrol) -->
+    <!-- Sorgulama Sonuçları Alanı -->
     <section th:if="${trackingInfo}" id="trackingResults" class="tracking-results">
 
         <h3 class="text-center text-success-emphasis">Gönderi Bilgileri</h3>
@@ -134,12 +128,10 @@
                 <div class="row">
                     <div class="col-md-6 mb-3 mb-md-0">
                         <p class="mb-1 text-muted">Takip Numarası:</p>
-                        <!-- th:text ile veri basımı -->
                         <h5 class="fw-bold" th:text="${trackingInfo.trackingNumber}">-</h5>
                     </div>
                     <div class="col-md-6">
                         <p class="mb-1 text-muted">Güncel Durum:</p>
-                        <!-- th:text ve th:classappend ile veri ve stil basımı -->
                         <h5><span class="badge rounded-pill fs-6"
                                   th:classappend="${trackingInfo.currentStatusBadgeClass}"
                                   th:text="${trackingInfo.currentStatus}">-</span></h5>
@@ -159,12 +151,12 @@
             </div>
         </div>
 
-        <!-- Gönderi Geçmişi (Thymeleaf ile kontrol ve doldurma) -->
+        <!-- Gönderi Geçmişi -->
         <div th:if="${trackingInfo.historyEvents != null and not #lists.isEmpty(trackingInfo.historyEvents)}">
             <h4 class="mt-4 mb-3 text-secondary">Gönderi Geçmişi</h4>
             <div class="table-responsive">
                 <table class="table table-hover align-middle history-table">
-                    <thead class="table-light"> <!-- Rengi değiştirdim -->
+                    <thead class="table-light">
                     <tr>
                         <th scope="col">Tarih ve Saat</th>
                         <th scope="col">Durum</th>
@@ -172,22 +164,36 @@
                     </tr>
                     </thead>
                     <tbody>
-                    <!-- th:each ile döngü -->
                     <tr th:each="event : ${trackingInfo.historyEvents}">
                         <td th:text="${event.timestamp != null ? #temporals.format(event.timestamp, 'dd.MM.yyyy HH:mm:ss') : '-'}">-</td>
-                        <td th:text="${event.statusDescription}">-</td>
+                        <!-- *** DEĞİŞİKLİK: Durum için Renkli Badge (th:switch ile) *** -->
+                        <td>
+                            <span class="badge fs-6" th:switch="${event.statusDescription}"> <!-- fs-6 eklendi -->
+                                <th:block th:case="'Kargo Alındı'"> <th:block th:classappend="'bg-secondary'" th:text="${event.statusDescription}"/> </th:block>
+                                <th:block th:case="'İlk Araca Yüklendi'"> <th:block th:classappend="'bg-primary'" th:text="${event.statusDescription}"/> </th:block>
+                                <th:block th:case="'Transfer Merkezinde'"> <th:block th:classappend="'bg-primary'" th:text="${event.statusDescription}"/> </th:block>
+                                <th:block th:case="'Son Araca Yüklendi'"> <th:block th:classappend="'bg-primary'" th:text="${event.statusDescription}"/> </th:block>
+                                <th:block th:case="'Dağıtım Bölgesinde'"> <th:block th:classappend="'bg-primary'" th:text="${event.statusDescription}"/> </th:block>
+                                <th:block th:case="'Dağıtımda'"> <th:block th:classappend="'bg-info text-dark'" th:text="${event.statusDescription}"/> </th:block> <!-- text-dark eklendi -->
+                                <th:block th:case="'Teslim Edildi'"> <th:block th:classappend="'bg-success'" th:text="${event.statusDescription}"/> </th:block>
+                                <th:block th:case="'İptal Edildi'"> <th:block th:classappend="'bg-danger'" th:text="${event.statusDescription}"/> </th:block>
+                                <!-- Diğer tüm durumlar için varsayılan -->
+                                <th:block th:case="*"> <th:block th:classappend="'bg-dark'" th:text="${event.statusDescription ?: '-'}"/> </th:block>
+                            </span>
+                        </td>
+                        <!-- ************************************************************ -->
                         <td th:text="${event.location}">-</td>
                     </tr>
                     </tbody>
                 </table>
             </div>
         </div>
-        <!-- Geçmiş yoksa gösterilecek mesaj (Thymeleaf ile kontrol) -->
+        <!-- Geçmiş yoksa gösterilecek mesaj -->
         <div th:if="${trackingInfo.historyEvents == null or #lists.isEmpty(trackingInfo.historyEvents)}" class="alert alert-light mt-3" role="alert">
             Bu gönderi için geçmiş hareket bulunamadı.
         </div>
 
-    </section> <!-- trackingResults sonu -->
+    </section>
 
 </main>
 
@@ -199,8 +205,6 @@
 
 <!-- Bootstrap JS Bundle -->
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js" integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
-
-<!-- *** YENİ TASARIMDAKİ JAVASCRIPT KODU BURADAN KALDIRILDI *** -->
 
 </body>
 </html>
