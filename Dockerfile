@@ -1,54 +1,33 @@
 # ----- Build Stage -----
-# Java 17 JDK içeren bir base image kullan (Alpine Linux daha küçüktür)
-FROM eclipse-temurin:17-jdk-alpine AS builder
+# pom.xml'deki Java sürümü 17 olduğu için Java 17 içeren bir Maven imajı kullanıyoruz.
+# Alpine tabanlı imajlar genellikle daha küçüktür.
+FROM maven:3.9-eclipse-temurin-17-alpine AS build
 
-# Uygulama için çalışma dizini oluştur
+# Build context'i için bir çalışma dizini ayarlamak iyi bir pratiktir.
 WORKDIR /app
 
-# Bağımlılıkları indirmek için önce pom.xml'i kopyala (Docker katman önbelleğinden yararlanmak için)
-COPY pom.xml .
+# Proje dosyalarını build imajına kopyala (senin istediğin gibi tüm context)
+COPY . .
 
-# Maven bağımlılıklarını indir (Sadece bağımlılıklar değiştiğinde bu katman yeniden çalışır)
-# -B: Batch mode (etkileşimsiz)
-RUN mvn dependency:go-offline -B
-
-# Proje kaynak kodunu kopyala
-COPY src ./src
-
-# Uygulamayı paketle (Testleri atla - CI/CD pipeline'ında çalıştırılmalı)
-# JAR dosyasının adını pom.xml'den al: cargo-process-tracking-0.0.1-SNAPSHOT.jar
-# Spring Boot plugin'i çalıştırılabilir bir JAR oluşturacak
-RUN mvn package -B -DskipTests
+# Maven ile projeyi derle ve paketle (JAR oluştur). Testleri atla.
+RUN mvn clean package -DskipTests
 
 # ----- Runtime Stage -----
-# Sadece Java 17 Runtime içeren daha küçük bir base image kullan
+# pom.xml Java 17 belirttiği için Java 17 JRE (Runtime Environment) içeren
+# küçük bir imaj kullanıyoruz (slim veya alpine jre). Alpine daha küçük olabilir.
 FROM eclipse-temurin:17-jre-alpine
 
-# Güvenlik için non-root kullanıcı oluştur
-RUN addgroup -S appgroup && adduser -S appuser -G appgroup
-USER appuser
-
-# Uygulama için çalışma dizini oluştur
+# Uygulamanın çalışacağı dizin (opsiyonel ama iyi pratik)
 WORKDIR /app
 
-# Build aşamasından oluşturulan JAR dosyasını kopyala ve yeniden adlandır
-# pom.xml'deki artifactId ve version'a göre JAR dosyasının adını belirtiyoruz.
-# Wildcard (*) kullanmak yerine tam ismi belirtmek daha güvenilir olabilir,
-# ama SNAPSHOT versiyonlarda isim değişmeyeceği için wildcard da iş görür.
-ARG JAR_FILE_PATH=/app/target/cargo-process-tracking-*.jar
-COPY --from=builder ${JAR_FILE_PATH} app.jar
+# Build aşamasında oluşturulan JAR dosyasını runtime imajına kopyala.
+# WORKDIR /app olarak ayarlandığı için JAR'ın yolu /app/target/ altında olacaktır.
+# Spring Boot genellikle tek bir çalıştırılabilir JAR oluşturur, bu yüzden wildcard (*) yeterli olur.
+COPY --from=build /app/target/*.jar app.jar
 
-# Uygulamanın çalışacağı portu belirt (application.yml'den: 1992)
+# application.yml dosyasında belirtilen portu (1992) dışarı aç.
 EXPOSE 1992
 
-# Çalışma zamanında JVM seçeneklerini (örn: bellek ayarları) geçirebilmek için ENV
-ENV JAVA_OPTS=""
-
-# Uygulamayı başlatma komutu
-# exec formunu kullanmak sinyallerin (örn. SIGTERM) doğru iletilmesini sağlar
-ENTRYPOINT ["java", "-jar", "/app/app.jar"]
-
-# Opsiyonel: Temel bir sağlık kontrolü ekle
-# Uygulamanın portuna TCP bağlantısı kurmayı dener
-HEALTHCHECK --interval=30s --timeout=5s --start-period=15s \
-  CMD nc -z localhost 1992 || exit 1
+# Container başladığında uygulamayı çalıştıracak komut.
+ENTRYPOINT ["java","-jar","app.jar"]
+# WORKDIR /app olduğu için ./app.jar veya sadece app.jar da olur ama /app/app.jar en net olanı. Düzeltme: Sadece app.jar yeterli WORKDIR tanımlı olduğu için.
