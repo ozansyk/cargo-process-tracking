@@ -1,22 +1,22 @@
 package com.ozansoyak.cargo_process_tracking.controller;
 
-import com.ozansoyak.cargo_process_tracking.dto.CargoResponse;
-import com.ozansoyak.cargo_process_tracking.dto.CreateCargoRequest;
-import com.ozansoyak.cargo_process_tracking.dto.PanelDataDto; // Yeni DTO importu
+import com.ozansoyak.cargo_process_tracking.dto.*;
+import com.ozansoyak.cargo_process_tracking.model.enums.CargoStatus;
 import com.ozansoyak.cargo_process_tracking.service.CargoService; // Service importu
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor; // Constructor injection için
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.validation.BindingResult;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.ModelAttribute;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.*;
 import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 
 import java.util.List;
@@ -121,11 +121,30 @@ public class PanelController {
         }
     }
 
+    // --- YENİ: Kargo Sorgulama Sayfası ---
     @GetMapping("/sorgula")
-    public String showCargoQueryPage(Model model, Authentication authentication) {
+    public String showCargoQueryPage(@ModelAttribute("searchCriteria") CargoSearchCriteria criteria, // Form binding için
+                                     @RequestParam(defaultValue = "0") int page,
+                                     @RequestParam(defaultValue = "10") int size,
+                                     // @RequestParam(defaultValue = "id,desc") String sort, // Şimdilik basit sıralama
+                                     Model model, Authentication authentication) {
+
         addUserAuthInfoToModel(model, authentication);
         model.addAttribute("activePage", "sorgula");
-        return "panel-sorgula";
+
+        // Sayfalama ve Sıralama
+        // TODO: Sort parametresini dinamik yap
+        Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "id")); // Veya lastUpdatedAt
+
+        // Servisten sayfalanmış sonuçları al
+        Page<CargoSearchResultDto> cargoPage = cargoService.searchCargos(criteria, pageable);
+
+        model.addAttribute("kargoPage", cargoPage); // Sayfalama bilgisiyle birlikte
+        model.addAttribute("cargoStatuses", CargoStatus.values()); // Durum filtresi için enum değerleri
+        // Arama kriterlerini tekrar modele eklemeye gerek yok, @ModelAttribute hallediyor.
+        // model.addAttribute("searchCriteria", criteria);
+
+        return "panel-sorgula"; // Yeni HTML dosyasının adı
     }
 
     @GetMapping("/kullanici-yonetimi")

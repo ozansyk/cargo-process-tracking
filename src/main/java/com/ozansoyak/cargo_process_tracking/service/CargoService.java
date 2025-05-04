@@ -1,7 +1,9 @@
 package com.ozansoyak.cargo_process_tracking.service;
 
-import com.ozansoyak.cargo_process_tracking.dto.*; // DTO importları
-import jakarta.persistence.EntityNotFoundException;
+import com.ozansoyak.cargo_process_tracking.dto.*;
+import org.springframework.data.domain.Page; // Page eklendi
+import org.springframework.data.domain.Pageable; // Pageable eklendi
+
 
 public interface CargoService {
 
@@ -13,9 +15,7 @@ public interface CargoService {
 
     TrackingInfoResponse getTrackingInfo(String trackingNumber);
 
-    /**
-     * Personel paneli için gerekli özet verileri (widget sayıları, son işlemler) getirir.
-     * @return Panel verilerini içeren DTO.
-     */
-    PanelDataDto getPanelData(); // Yeni metot
+    PanelDataDto getPanelData();
+
+    Page<CargoSearchResultDto> searchCargos(CargoSearchCriteria criteria, Pageable pageable);
 }

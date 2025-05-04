@@ -1,0 +1,434 @@
+<!doctype html>
+<html lang="tr" xmlns:th="http://www.thymeleaf.org"
+      xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Personel Paneli - Kargo Sorgula/Güncelle</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css">
+    <!-- Ortak Stiller -->
+    <style>
+        :root { --navbar-height: 56px; --sidebar-width: 240px; }
+        body { padding-top: var(--navbar-height); overflow-x: hidden; background-color: #f8f9fa; }
+        .sidebar { position: fixed; top: var(--navbar-height); bottom: 0; left: 0; width: var(--sidebar-width); z-index: 1000; padding: 1rem 0; overflow-x: hidden; overflow-y: auto; background-color: #e9ecef; border-right: 1px solid #ced4da; }
+        @media (max-width: 767.98px) { .sidebar { width: 100%; height: auto; position: relative; top: auto; border-right: none; border-bottom: 1px solid #dee2e6; } .main-content { margin-left: 0 !important; } }
+        .sidebar .nav-link { color: #495057; padding: .6rem 1.2rem; white-space: nowrap; border-left: 3px solid transparent; transition: background-color 0.1s ease-in-out, border-left-color 0.1s ease-in-out; }
+        .sidebar .nav-link .bi { margin-right: .75rem; font-size: 1.1rem; vertical-align: text-bottom; }
+        .sidebar .nav-link.active { color: #0d6efd; background-color: #fff; border-left-color: #0d6efd; font-weight: 500; }
+        .sidebar .nav-link:hover:not(.active) { background-color: #dee2e6; color: #212529; }
+        .sidebar-heading { padding: .75rem 1.2rem; font-size: .8rem; color: #6c757d; text-transform: uppercase; font-weight: 600; letter-spacing: .05em; }
+        .main-content { margin-left: var(--sidebar-width); padding: 1.5rem; width: calc(100% - var(--sidebar-width)); overflow-x: auto; }
+        @media (max-width: 767.98px) { .main-content { width: 100%; margin-left: 0; } }
+        .navbar { z-index: 1030; box-shadow: 0 0.125rem 0.25rem rgba(0,0,0,.075); }
+        .navbar-brand { font-weight: 600; }
+        .card { border: none; border-radius: .5rem; }
+        .table-sm th, .table-sm td { padding: 0.4rem; }
+        .badge { padding: 0.4em 0.6em; font-size: 0.9em; }
+        .filter-card { background-color: #ffffff; box-shadow: 0 0.125rem 0.25rem rgba(0,0,0,.075); }
+        .modal-dialog-scrollable .modal-body { max-height: 70vh; overflow-y: auto; }
+        /* Modal yükleniyor */
+        #modalLoadingIndicator { padding: 3rem 0; }
+        /* Sayfalama aktif link */
+        .pagination .page-item.active .page-link { z-index: 1; } /* Aktif sayfanın önde görünmesi */
+    </style>
+</head>
+<body>
+
+<!-- Sabit Üst Navbar -->
+<nav class="navbar navbar-expand-md navbar-dark fixed-top bg-dark">
+    <div class="container-fluid">
+        <a class="navbar-brand" th:href="@{/panel}">Kargo Takip Sistemi</a>
+        <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#sidebarMenu" aria-controls="sidebarMenu" aria-expanded="false" aria-label="Toggle navigation">
+            <span class="navbar-toggler-icon"></span>
+        </button>
+        <div class="d-flex align-items-center">
+            <span class="navbar-text text-white me-3 d-none d-md-inline"
+                  th:text="|Hoşgeldin, ${username} [${userRoles}]|"></span>
+            <form th:action="@{/logout}" method="post" class="d-inline">
+                <button class="btn btn-outline-light btn-sm" type="submit">Çıkış Yap</button>
+            </form>
+        </div>
+    </div>
+</nav>
+
+<div class="container-fluid">
+    <div class="row">
+        <!-- Kenar Çubuğu (Sidebar) -->
+        <nav id="sidebarMenu" class="col-md-3 col-lg-2 d-md-block sidebar collapse bg-light">
+            <div class="position-sticky">
+                <ul class="nav flex-column pt-2">
+                    <li class="nav-item"> <a class="nav-link" th:href="@{/panel}"> <i class="bi bi-house-door"></i> Ana Panel </a> </li>
+                    <li class="nav-item"> <a class="nav-link" th:href="@{/panel/yeni-kargo}"> <i class="bi bi-box-seam"></i> Yeni Kargo Kaydı </a> </li>
+                    <li class="nav-item"> <a class="nav-link active" aria-current="page" th:href="@{/panel/sorgula}"> <i class="bi bi-search"></i> Kargo Sorgula </a> </li>
+                    <li class="nav-item"> <a class="nav-link" href="#"> <i class="bi bi-file-earmark-bar-graph"></i> Raporlar </a> </li>
+                    <li class="nav-item" sec:authorize="hasRole('ADMIN')"> <a class="nav-link" th:href="@{/panel/kullanici-yonetimi}"> <i class="bi bi-people"></i> Kullanıcı Yönetimi </a> </li>
+                </ul>
+                <h6 class="sidebar-heading d-flex justify-content-between align-items-center px-3 mt-4 mb-1 text-muted text-uppercase"> <span>Hesabım</span> </h6>
+                <ul class="nav flex-column mb-2">
+                    <li class="nav-item"> <a class="nav-link" href="#"> <i class="bi bi-person-circle"></i> Profilim </a> </li>
+                    <li class="nav-item">
+                        <form th:action="@{/logout}" method="post" class="d-inline">
+                            <button class="nav-link text-start w-100 btn btn-link" type="submit" style="border:none; padding: .6rem 1.2rem;"> <i class="bi bi-box-arrow-right"></i> Çıkış Yap </button>
+                        </form>
+                    </li>
+                </ul>
+            </div>
+        </nav>
+
+        <!-- Ana İçerik Alanı -->
+        <main class="main-content">
+            <h2 class="mb-4 border-bottom pb-2">Kargo Sorgulama ve Güncelleme</h2>
+
+            <!-- Filtreleme Alanı -->
+            <div class="card filter-card mb-4">
+                <div class="card-body">
+                    <h5 class="card-title mb-3"><i class="bi bi-funnel-fill me-2"></i>Arama Filtreleri</h5>
+                    <!-- Form kriter nesnesine bağlandı -->
+                    <form class="row g-3 align-items-end" th:action="@{/panel/sorgula}" method="get" th:object="${searchCriteria}">
+                        <div class="col-lg-3 col-md-6">
+                            <label for="trackingNo" class="form-label">Takip Numarası</label>
+                            <input type="text" class="form-control" id="trackingNo" th:field="*{trackingNo}">
+                        </div>
+                        <div class="col-lg-3 col-md-6">
+                            <label for="customerInfo" class="form-label">Gönderici/Alıcı Adı/Tel</label>
+                            <input type="text" class="form-control" id="customerInfo" th:field="*{customerInfo}">
+                        </div>
+                        <div class="col-lg-3 col-md-6">
+                            <label for="statusFilter" class="form-label">Durum</label>
+                            <select id="statusFilter" class="form-select" th:field="*{statusFilter}">
+                                <option value="">Tümü</option>
+                                <!-- Dinamik olarak enum değerlerinden doldur -->
+                                <option th:each="status : ${cargoStatuses}"
+                                        th:value="${status}"
+                                        th:text="${#strings.capitalizeLower(status.name().replace('_',' ').toLowerCase())}">Durum
+                                </option>
+                            </select>
+                        </div>
+                        <!-- Tarih filtresi yorumda kaldı -->
+                        <!-- <div class="col-lg-2 col-md-6">
+                            <label for="date" class="form-label">Tarih</label>
+                             <input type="date" class="form-control" id="date" th:field="*{date}">
+                        </div> -->
+                        <div class="col-lg-auto col-md-12"> <!-- Buton mobil/desktop için hizalandı -->
+                            <button type="submit" class="btn btn-primary w-100"><i class="bi bi-search me-1"></i> Ara</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <!-- Arama Sonuçları -->
+            <h4>Arama Sonuçları (<span th:text="${kargoPage?.totalElements ?: 0}">0</span> adet)</h4>
+            <div th:if="${kargoPage == null or kargoPage.empty}" class="alert alert-info mt-3" role="alert">
+                Filtre kriterlerinize uygun kargo bulunamadı.
+            </div>
+
+            <div th:if="${kargoPage != null and not kargoPage.empty}" class="table-responsive mt-3">
+                <table class="table table-striped table-hover table-bordered table-sm align-middle">
+                    <thead class="table-light">
+                    <tr>
+                        <th scope="col">Takip No</th>
+                        <th scope="col">Gönderici</th>
+                        <th scope="col">Alıcı</th>
+                        <th scope="col">Durum</th>
+                        <th scope="col">Son İşlem T.</th>
+                        <th scope="col">Eylemler</th>
+                    </tr>
+                    </thead>
+                    <tbody>
+                    <!-- kargoPage.content üzerinde dön -->
+                    <tr th:each="kargo : ${kargoPage.content}">
+                        <td th:text="${kargo.trackingNumber}">XYZ123456</td>
+                        <td th:text="${kargo.senderName}">Ahmet Yılmaz</td>
+                        <td>
+                            <span th:text="${kargo.receiverName}">Ayşe Kaya</span>
+                            (<span th:text="${kargo.receiverCity}">Ankara</span>)
+                        </td>
+                        <td>
+                            <span class="badge fs-6"
+                                  th:classappend="${kargo.currentStatusBadgeClass}"
+                                  th:text="${kargo.currentStatus}">Durum</span>
+                        </td>
+                        <td th:text="${kargo.lastUpdateTime != null ? #temporals.format(kargo.lastUpdateTime, 'dd.MM.yy HH:mm') : '-'}">17.10.23 09:15</td>
+                        <td>
+                            <!-- Buton ID'si ve data attribute eklendi -->
+                            <button class="btn btn-sm btn-outline-primary"
+                                    th:id="'detailBtn-' + ${kargo.trackingNumber}"
+                                    th:attr="data-tracking-number=${kargo.trackingNumber}"
+                                    onclick="openDetailModal(this.getAttribute('data-tracking-number'))">
+                                <i class="bi bi-pencil-square me-1"></i>Detay/Güncelle
+                            </button>
+                        </td>
+                    </tr>
+                    </tbody>
+                </table>
+
+                <!-- Sayfalama -->
+                <nav aria-label="Page navigation" th:if="${kargoPage.totalPages > 1}">
+                    <ul class="pagination justify-content-center flex-wrap"> <!-- flex-wrap eklendi -->
+                        <!-- İlk Sayfa -->
+                        <li class="page-item" th:classappend="${kargoPage.first} ? 'disabled'">
+                            <a class="page-link" th:href="@{/panel/sorgula(page=0, size=${kargoPage.size} + ${#strings.isEmpty(searchCriteria.trackingNo) ? '' : '&trackingNo=' + searchCriteria.trackingNo} + ${#strings.isEmpty(searchCriteria.customerInfo) ? '' : '&customerInfo=' + searchCriteria.customerInfo} + ${#strings.isEmpty(searchCriteria.statusFilter) ? '' : '&statusFilter=' + searchCriteria.statusFilter})}">İlk</a>
+                        </li>
+                        <!-- Önceki Sayfa -->
+                        <li class="page-item" th:classappend="${kargoPage.first} ? 'disabled'">
+                            <a class="page-link" th:href="@{/panel/sorgula(page=${kargoPage.number - 1}, size=${kargoPage.size} + ${#strings.isEmpty(searchCriteria.trackingNo) ? '' : '&trackingNo=' + searchCriteria.trackingNo} + ${#strings.isEmpty(searchCriteria.customerInfo) ? '' : '&customerInfo=' + searchCriteria.customerInfo} + ${#strings.isEmpty(searchCriteria.statusFilter) ? '' : '&statusFilter=' + searchCriteria.statusFilter})}">Önceki</a>
+                        </li>
+                        <!-- Sayfa Numaraları (Basitleştirilmiş) -->
+                        <li class="page-item disabled"><span class="page-link" th:text="|Sayfa ${kargoPage.number + 1} / ${kargoPage.totalPages}|"></span></li>
+                        <!-- Sonraki Sayfa -->
+                        <li class="page-item" th:classappend="${kargoPage.last} ? 'disabled'">
+                            <a class="page-link" th:href="@{/panel/sorgula(page=${kargoPage.number + 1}, size=${kargoPage.size} + ${#strings.isEmpty(searchCriteria.trackingNo) ? '' : '&trackingNo=' + searchCriteria.trackingNo} + ${#strings.isEmpty(searchCriteria.customerInfo) ? '' : '&customerInfo=' + searchCriteria.customerInfo} + ${#strings.isEmpty(searchCriteria.statusFilter) ? '' : '&statusFilter=' + searchCriteria.statusFilter})}">Sonraki</a>
+                        </li>
+                        <!-- Son Sayfa -->
+                        <li class="page-item" th:classappend="${kargoPage.last} ? 'disabled'">
+                            <a class="page-link" th:href="@{/panel/sorgula(page=${kargoPage.totalPages - 1}, size=${kargoPage.size} + ${#strings.isEmpty(searchCriteria.trackingNo) ? '' : '&trackingNo=' + searchCriteria.trackingNo} + ${#strings.isEmpty(searchCriteria.customerInfo) ? '' : '&customerInfo=' + searchCriteria.customerInfo} + ${#strings.isEmpty(searchCriteria.statusFilter) ? '' : '&statusFilter=' + searchCriteria.statusFilter})}">Son</a>
+                        </li>
+                    </ul>
+                </nav>
+            </div>
+
+        </main>
+    </div>
+</div>
+
+<!-- Footer -->
+<footer class="text-center py-4 bg-light mt-auto"> <!-- mt-auto footer'ı itebilir -->
+    <p class="mb-1">© 2025 Kargo Takip Sistemi</p>
+    <p class="mb-0">Ozan SOYAK</p>
+</footer>
+
+<!-- Detay ve Güncelleme Modalı -->
+<div class="modal fade" id="detailUpdateModal" tabindex="-1" aria-labelledby="detailUpdateModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h1 class="modal-title fs-5" id="detailUpdateModalLabel">Kargo Detayları - <span id="modalTrackingNumber" class="fw-bold"></span></h1>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <!-- Modal yükleniyor -->
+                <div id="modalLoadingIndicator" class="text-center py-5">
+                    <div class="spinner-border text-primary" style="width: 3rem; height: 3rem;" role="status"><span class="visually-hidden">Yükleniyor...</span></div>
+                    <p class="mt-2 text-muted">Detaylar yükleniyor...</p>
+                </div>
+                <!-- Modal hata -->
+                <div id="modalErrorArea" class="alert alert-danger" style="display: none;"></div>
+                <!-- Modal içerik (başlangıçta gizli) -->
+                <div id="modalContentArea" style="display: none;">
+                    <ul class="nav nav-tabs mb-3" id="cargoTab" role="tablist">
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link active" id="general-tab" data-bs-toggle="tab" data-bs-target="#general-tab-pane" type="button" role="tab">Genel Bilgiler</button>
+                        </li>
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link" id="history-tab" data-bs-toggle="tab" data-bs-target="#history-tab-pane" type="button" role="tab">Hareketler</button>
+                        </li>
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link" id="update-tab" data-bs-toggle="tab" data-bs-target="#update-tab-pane" type="button" role="tab">İşlemler</button> <!-- Adı değişti -->
+                        </li>
+                    </ul>
+                    <div class="tab-content" id="cargoTabContent">
+                        <div class="tab-pane fade show active" id="general-tab-pane" role="tabpanel" tabindex="0">
+                            <h5>Gönderici Bilgileri</h5> <p id="modalSenderInfo">-</p>
+                            <h5>Alıcı Bilgileri</h5> <p id="modalReceiverInfo">-</p>
+                            <h5>Kargo Detayları</h5> <p id="modalCargoDetails">-</p>
+                        </div>
+                        <div class="tab-pane fade" id="history-tab-pane" role="tabpanel" tabindex="0">
+                            <div class="table-responsive">
+                                <table class="table table-sm table-striped">
+                                    <thead><tr><th>Tarih</th><th>Durum</th><th>Lokasyon</th></tr></thead>
+                                    <tbody id="modalHistoryTableBody"></tbody>
+                                </table>
+                            </div>
+                        </div>
+                        <div class="tab-pane fade" id="update-tab-pane" role="tabpanel" tabindex="0">
+                            <h5>İşlemler</h5>
+                            <p><strong>Mevcut Durum:</strong> <span id="modalCurrentStatus" class="badge fs-6">-</span></p>
+                            <hr>
+                            <!-- Butonları yan yana koymak için div -->
+                            <div class="d-grid gap-2 d-sm-flex justify-content-sm-center">
+                                <button id="completeStepButton" class="btn btn-success btn-lg" onclick="completeStep()">
+                                    <i class="bi bi-check-circle-fill me-1"></i> Aktif Adımı Tamamla
+                                </button>
+                                <button id="cancelCargoButton" class="btn btn-danger btn-lg" onclick="cancelCargo()">
+                                    <i class="bi bi-x-octagon-fill me-1"></i> Kargoyu İptal Et
+                                </button>
+                            </div>
+                            <div id="updateResultArea" class="mt-3"></div> <!-- İşlem sonuç mesajı -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Kapat</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Bootstrap JS Bundle -->
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+
+<!-- Modal İşlemleri için JavaScript -->
+<script th:inline="javascript">
+    const detailModalElement = document.getElementById('detailUpdateModal');
+    const detailModal = detailModalElement ? new bootstrap.Modal(detailModalElement) : null;
+    const modalLoading = document.getElementById('modalLoadingIndicator');
+    const modalError = document.getElementById('modalErrorArea');
+    const modalContent = document.getElementById('modalContentArea');
+    const modalTrackingNumberSpan = document.getElementById('modalTrackingNumber');
+    const modalSenderInfo = document.getElementById('modalSenderInfo');
+    const modalReceiverInfo = document.getElementById('modalReceiverInfo');
+    const modalCargoDetails = document.getElementById('modalCargoDetails'); // DTO'da yok ama ekleyebiliriz
+    const modalHistoryTableBody = document.getElementById('modalHistoryTableBody');
+    const modalCurrentStatusSpan = document.getElementById('modalCurrentStatus');
+    const completeStepButton = document.getElementById('completeStepButton');
+    const cancelCargoButton = document.getElementById('cancelCargoButton');
+    const updateResultArea = document.getElementById('updateResultArea');
+
+    let currentTrackingNumber = null; // Modal'da işlem yapılan takip noyu tutmak için
+
+    // Modal açıldığında veriyi çek
+    function openDetailModal(trackingNumber) {
+        if (!detailModal || !trackingNumber) return;
+
+        currentTrackingNumber = trackingNumber; // Takip noyu sakla
+        modalTrackingNumberSpan.textContent = trackingNumber; // Başlığa yaz
+
+        // Önceki içerikleri temizle ve yükleniyor'u göster
+        modalError.style.display = 'none';
+        modalContent.style.display = 'none';
+        modalLoading.style.display = 'block';
+        updateResultArea.innerHTML = ''; // Önceki işlem sonuçlarını temizle
+        completeStepButton.disabled = true; // Butonları başlangıçta devre dışı bırak
+        cancelCargoButton.disabled = true;
+
+        detailModal.show(); // Modalı göster
+
+        // API'den detayları çek
+        fetch(`/api/track?trackingNumber=${encodeURIComponent(trackingNumber)}`)
+            .then(response => {
+                if (!response.ok) {
+                    return response.json().then(err => { throw new Error(err.message || `Sunucu hatası: ${response.status}`) });
+                }
+                return response.json();
+            })
+            .then(data => {
+                populateModal(data); // Modal'ı doldur
+                modalLoading.style.display = 'none';
+                modalContent.style.display = 'block'; // İçeriği göster
+            })
+            .catch(error => {
+                console.error("Modal veri çekme hatası:", error);
+                modalLoading.style.display = 'none';
+                modalError.textContent = `Detaylar alınamadı: ${error.message}`;
+                modalError.style.display = 'block';
+            });
+    }
+
+    // Gelen veriyle modalı doldur
+    function populateModal(data) {
+        if (!data) return;
+
+        // Genel Bilgiler Tabı
+        modalSenderInfo.textContent = `${data.senderName || '?'} (${data.senderCity || '?'})`; // DTO'da senderName olmalı
+        modalReceiverInfo.textContent = `${data.receiverName || '?'} (${data.receiverCity || '?'})`; // DTO'da receiverName olmalı
+        // modalCargoDetails.textContent = `Ağırlık: ${data.weight || '?'} kg, Boyut: ${data.dimensions || '?'} ...`; // DTO'ya eklenirse
+
+        // Hareketler Tabı
+        modalHistoryTableBody.innerHTML = ''; // Önce temizle
+        if (data.historyEvents && data.historyEvents.length > 0) {
+            // En yeniden eskiye sıralı geldiğini varsayıyoruz (Service'te ayarlandı)
+            data.historyEvents.forEach(event => {
+                const row = modalHistoryTableBody.insertRow();
+                const dateCell = row.insertCell();
+                const statusCell = row.insertCell();
+                const locationCell = row.insertCell();
+
+                dateCell.textContent = event.timestamp ? new Date(event.timestamp).toLocaleString('tr-TR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit'}) : '-';
+                statusCell.innerHTML = `<span class="badge ${event.statusBadgeClass || 'bg-secondary'}">${event.statusDescription || '-'}</span>`;
+                locationCell.textContent = event.location || '-';
+            });
+        } else {
+            modalHistoryTableBody.innerHTML = '<tr><td colspan="3" class="text-center text-muted">Hareket bulunamadı.</td></tr>';
+        }
+
+        // İşlemler Tabı
+        modalCurrentStatusSpan.textContent = data.currentStatus || 'Bilinmiyor';
+        modalCurrentStatusSpan.className = `badge fs-6 ${data.currentStatusBadgeClass || 'bg-secondary'}`;
+
+        // Butonları etkinleştir/devre dışı bırak
+        // DTO'ya completable ve cancellable alanlarını eklediğimizi varsayıyoruz
+        completeStepButton.disabled = !(data.completable === true);
+        cancelCargoButton.disabled = !(data.cancellable === true);
+
+        // İsteğe bağlı: Tamamlanacak adım hakkında bilgi
+        // const nextStepHelp = document.getElementById('completeStepHelp');
+        // if (nextStepHelp) nextStepHelp.textContent = data.nextStepAction || '';
+
+    }
+
+    // "Aktif Adımı Tamamla" butonu fonksiyonu
+    function completeStep() {
+        if (!currentTrackingNumber) return;
+        updateResultArea.innerHTML = '<div class="spinner-border spinner-border-sm text-success" role="status"></div> İşleniyor...';
+        completeStepButton.disabled = true; // Tekrar tıklamayı engelle
+        cancelCargoButton.disabled = true;
+
+        fetch(`/api/cargos/${currentTrackingNumber}/complete-step`, { method: 'PUT' })
+            .then(response => {
+                if (!response.ok) {
+                    return response.json().then(err => { throw new Error(err.message || `İşlem Başarısız: ${response.status}`) });
+                }
+                return response.json();
+            })
+            .then(data => {
+                updateResultArea.innerHTML = `<div class="alert alert-success py-2 px-3 d-inline-block">${data.message || 'Adım başarıyla tamamlandı!'}</div>`;
+                // Başarı sonrası modalı tekrar yükleyebilir veya kapatabiliriz.
+                // Şimdilik sadece mesaj gösterelim, butonlar devre dışı kalır.
+                // openDetailModal(currentTrackingNumber); // Detayları yenile
+                // detailModal.hide(); // Modalı kapat
+            })
+            .catch(error => {
+                console.error("Adım tamamlama hatası:", error);
+                updateResultArea.innerHTML = `<div class="alert alert-danger py-2 px-3 d-inline-block">Hata: ${error.message}</div>`;
+                completeStepButton.disabled = false; // Hata olursa tekrar denemeye izin ver
+                cancelCargoButton.disabled = false;
+            });
+    }
+
+    // "Kargoyu İptal Et" butonu fonksiyonu
+    function cancelCargo() {
+        if (!currentTrackingNumber) return;
+        // Onay isteyelim
+        if (!confirm(`'${currentTrackingNumber}' takip numaralı kargoyu iptal etmek istediğinizden emin misiniz? Bu işlem geri alınamaz.`)) {
+            return;
+        }
+
+        updateResultArea.innerHTML = '<div class="spinner-border spinner-border-sm text-danger" role="status"></div> İptal Ediliyor...';
+        completeStepButton.disabled = true;
+        cancelCargoButton.disabled = true; // Tekrar tıklamayı engelle
+
+        fetch(`/api/cargos/${currentTrackingNumber}/cancel`, { method: 'PUT' })
+            .then(response => {
+                if (!response.ok) {
+                    return response.json().then(err => { throw new Error(err.message || `İptal Başarısız: ${response.status}`) });
+                }
+                return response.json();
+            })
+            .then(data => {
+                updateResultArea.innerHTML = `<div class="alert alert-success py-2 px-3 d-inline-block">${data.message || 'Kargo başarıyla iptal edildi!'}</div>`;
+                // Başarı sonrası modalı tekrar yükleyebilir veya kapatabiliriz.
+                // openDetailModal(currentTrackingNumber); // Detayları yenile
+            })
+            .catch(error => {
+                console.error("Kargo iptal hatası:", error);
+                updateResultArea.innerHTML = `<div class="alert alert-danger py-2 px-3 d-inline-block">Hata: ${error.message}</div>`;
+                completeStepButton.disabled = false; // Hata olursa tekrar denemeye izin ver (belki iptal edilemez durumdadır)
+                cancelCargoButton.disabled = false;
+            });
+    }
+
+</script>
+</body>
+</html>

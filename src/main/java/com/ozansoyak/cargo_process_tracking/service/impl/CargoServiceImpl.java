@@ -5,6 +5,7 @@ import com.ozansoyak.cargo_process_tracking.exception.TrackingNumberGenerationEx
 import com.ozansoyak.cargo_process_tracking.model.Cargo;
 import com.ozansoyak.cargo_process_tracking.model.enums.CargoStatus;
 import com.ozansoyak.cargo_process_tracking.repository.CargoRepository;
+import com.ozansoyak.cargo_process_tracking.repository.CargoSpecification;
 import com.ozansoyak.cargo_process_tracking.service.CargoService;
 
 import jakarta.persistence.EntityNotFoundException;
@@ -22,6 +23,10 @@ import org.camunda.bpm.model.bpmn.instance.UserTask;
 import org.camunda.bpm.model.bpmn.instance.camunda.CamundaProperties;
 import org.camunda.bpm.model.bpmn.instance.camunda.CamundaProperty;
 
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -430,7 +435,61 @@ public class CargoServiceImpl implements CargoService {
                 .build();
     }
 
+    // --- YENİ ARAMA METODU ---
+    @Override
+    @Transactional(readOnly = true)
+    public Page<CargoSearchResultDto> searchCargos(CargoSearchCriteria criteria, Pageable pageable) {
+        log.info("Kargo arama isteği alındı. Kriterler: {}, Sayfalama: {}", criteria, pageable);
+
+        // 1. Specification oluştur
+        Specification<Cargo> spec = CargoSpecification.findByCriteria(criteria);
+
+        // 2. Repository'den sayfalanmış veriyi çek
+        Page<Cargo> cargoPage = cargoRepository.findAll(spec, pageable);
+        log.info("{} adet kargo bulundu (Toplam: {}).", cargoPage.getNumberOfElements(), cargoPage.getTotalElements());
+
+        // 3. Page<Cargo> -> Page<CargoSearchResultDto> dönüşümü yap
+        List<CargoSearchResultDto> resultList = cargoPage.getContent().stream()
+                .map(this::mapCargoToSearchResultDto) // Dönüşüm için helper metot
+                .collect(Collectors.toList());
+
+        return new PageImpl<>(resultList, pageable, cargoPage.getTotalElements());
+    }
+
     // --- Yardımcı Metotlar (Sizin Kodunuzla Aynı) ---
+
+    // Cargo'yu CargoSearchResultDto'ya mapleyen yardımcı metot
+    private CargoSearchResultDto mapCargoToSearchResultDto(Cargo cargo) {
+        // İlerletilebilir mi? (Aktif user task var mı?)
+        boolean isCompletable = false;
+        if (cargo.getProcessInstanceId() != null &&
+                cargo.getCurrentStatus() != CargoStatus.DELIVERED &&
+                cargo.getCurrentStatus() != CargoStatus.CANCELLED) {
+            // Aktif user task var mı diye hızlıca kontrol et
+            long activeTaskCount = taskService.createTaskQuery()
+                    .processInstanceId(cargo.getProcessInstanceId())
+                    .active()
+                    .count();
+            isCompletable = activeTaskCount > 0;
+        }
+
+        // İptal edilebilir mi? (Henüz teslim edilmedi veya iptal edilmediyse)
+        boolean isCancellable = cargo.getCurrentStatus() != CargoStatus.DELIVERED &&
+                cargo.getCurrentStatus() != CargoStatus.CANCELLED;
+
+        // DTO'yu oluştur
+        return CargoSearchResultDto.builder()
+                .trackingNumber(cargo.getTrackingNumber())
+                .senderName(cargo.getSenderName()) // Sadece isim yeterli olabilir
+                .receiverName(cargo.getReceiverName())
+                .receiverCity(cargo.getReceiverCity())
+                .currentStatus(getStatusDisplayName(cargo.getCurrentStatus()))
+                .currentStatusBadgeClass(getStatusBadgeClass(cargo.getCurrentStatus()))
+                .lastUpdateTime(cargo.getLastUpdatedAt()) // Veya createdAt, hangisi varsa
+                .cancellable(isCancellable)
+                .completable(isCompletable)
+                .build();
+    }
 
     private CargoStatus findStatusByActivityName(String activityName) {
         if (activityName == null) return null;
