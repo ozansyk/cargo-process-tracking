@@ -96,7 +96,7 @@
                                 <option value="">Tümü</option>
                                 <!-- *** DÜZELTME: #strings.capitalize kullanımı *** -->
                                 <option th:each="status : ${cargoStatuses}"
-                                        th:value="${status.name()}" <!-- value enum adı olmalı -->
+                                        th:value="${status.name()}"
                                 th:text="${#strings.capitalize(#strings.toLowerCase(status.name().replace('_',' ')))}">Durum Metni
                                 </option>
                                 <!-- *********************************************** -->
@@ -111,11 +111,11 @@
 
             <!-- Arama Sonuçları -->
             <h4>Arama Sonuçları (<span th:text="${kargoPage?.totalElements ?: 0}">0</span> adet)</h4>
-            <div th:if="${kargoPage == null or kargoPage.empty}" class="alert alert-info mt-3" role="alert">
+            <div th:if="${kargoPage == null or kargoPage.isEmpty()}" class="alert alert-info mt-3" role="alert">
                 Filtre kriterlerinize uygun kargo bulunamadı.
             </div>
 
-            <div th:if="${kargoPage != null and not kargoPage.empty}" class="table-responsive mt-3">
+            <div th:if="${kargoPage != null and not kargoPage.isEmpty()}" class="table-responsive mt-3">
                 <table class="table table-striped table-hover table-bordered table-sm align-middle">
                     <thead class="table-light">
                     <tr>
