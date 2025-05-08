@@ -3,6 +3,7 @@ package com.ozansoyak.cargo_process_tracking.controller;
 // ApproveNextStepRequest importu kaldırıldı
 import com.ozansoyak.cargo_process_tracking.dto.CreateCargoRequest;
 import com.ozansoyak.cargo_process_tracking.dto.CargoResponse;
+import com.ozansoyak.cargo_process_tracking.dto.TrackingInfoResponse;
 import com.ozansoyak.cargo_process_tracking.service.CargoService;
 import jakarta.persistence.EntityNotFoundException;
 import jakarta.validation.Valid;
@@ -12,6 +13,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+
+import java.util.Map;
 
 
 @RestController
@@ -86,10 +89,21 @@ public class CargoController {
 
     // approve-step ENDPOINT'İ KALDIRILDI
 
-    @GetMapping("/track")
-    public ResponseEntity<?> trackCargo(@RequestParam String trackingNumber) {
-        // ... (Aynı)
-        log.warn("GET /track endpoint'i henüz implemente edilmedi.");
-        return ResponseEntity.status(HttpStatus.NOT_IMPLEMENTED).body("Takip özelliği henüz aktif değil.");
+    @GetMapping("/details/{trackingNumber}") // GET /api/cargos/details/{tn}
+    public ResponseEntity<?> getCargoDetailsForModal(@PathVariable String trackingNumber) {
+        log.info("GET /api/cargos/details/{} isteği alındı (Modal için).", trackingNumber);
+        try {
+            TrackingInfoResponse trackingInfo = cargoService.getTrackingInfo(trackingNumber.trim());
+            log.info("Takip bilgisi bulundu (API-Detay): {}", trackingNumber);
+            return ResponseEntity.ok(trackingInfo); // DTO'yu JSON olarak döndür
+        } catch (EntityNotFoundException e) {
+            log.warn("Takip numarası bulunamadı (API-Detay): {}", trackingNumber);
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(Map.of("message", e.getMessage()));
+        } catch (Exception e) {
+            log.error("Kargo detay (API) alınırken beklenmedik hata (Takip No: {}): {}", trackingNumber, e.getMessage(), e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(Map.of("message", "Detay bilgileri alınırken sunucu hatası oluştu."));
+        }
     }
 }

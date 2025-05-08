@@ -19,7 +19,10 @@ import org.springframework.validation.BindingResult;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 
+import java.util.Arrays;
+import java.util.LinkedHashMap; // Sıralı Map için
 import java.util.List;
+import java.util.Map; // Map için
 import java.util.stream.Collectors;
 
 @Controller
@@ -29,6 +32,30 @@ import java.util.stream.Collectors;
 public class PanelController {
 
     private final CargoService cargoService;
+
+    // --- Durum Enum -> Türkçe Metin Map'i ---
+    // Controller seviyesinde veya bir utility sınıfında tanımlanabilir
+    private static final Map<CargoStatus, String> STATUS_DISPLAY_NAMES = Map.ofEntries(
+            Map.entry(CargoStatus.PENDING, "Beklemede"),
+            Map.entry(CargoStatus.RECEIVED, "Kargo Alındı"),
+            Map.entry(CargoStatus.LOADED_ON_VEHICLE_1, "İlk Araca Yüklendi"),
+            Map.entry(CargoStatus.AT_TRANSFER_CENTER, "Transfer Merkezinde"),
+            Map.entry(CargoStatus.LOADED_ON_VEHICLE_2, "Son Araca Yüklendi"),
+            Map.entry(CargoStatus.AT_DISTRIBUTION_HUB, "Dağıtım Bölgesinde"),
+            Map.entry(CargoStatus.OUT_FOR_DELIVERY, "Dağıtımda"),
+            Map.entry(CargoStatus.DELIVERED, "Teslim Edildi"),
+            Map.entry(CargoStatus.CANCELLED, "İptal Edildi")
+    );
+    // Sıralı göstermek için LinkedHashMap'e çevirelim (isteğe bağlı)
+    private static final Map<CargoStatus, String> ORDERED_STATUS_DISPLAY_NAMES;
+    static {
+        ORDERED_STATUS_DISPLAY_NAMES = new LinkedHashMap<>();
+        Arrays.stream(CargoStatus.values()).forEach(status ->
+                ORDERED_STATUS_DISPLAY_NAMES.put(status, STATUS_DISPLAY_NAMES.getOrDefault(status, status.name()))
+        );
+    }
+    // -----------------------------------------
+
 
     @GetMapping
     public String showPanel(Model model, Authentication authentication) { /* ... Önceki kod ... */
@@ -58,8 +85,7 @@ public class PanelController {
     @PostMapping("/yeni-kargo")
     public String processNewCargoForm(@Valid @ModelAttribute("createCargoRequest") CreateCargoRequest request,
                                       BindingResult bindingResult,
-                                      Model model,
-                                      Authentication authentication) { /* ... Önceki kod ... */
+                                      Model model, Authentication authentication) { /* ... Önceki kod ... */
         addUserAuthInfoToModel(model, authentication);
         model.addAttribute("activePage", "yeniKargo");
         if (bindingResult.hasErrors()) {
@@ -81,7 +107,7 @@ public class PanelController {
         }
     }
 
-    // --- Kargo Sorgulama Sayfası (Pageable ve Kriterler) ---
+    // --- Kargo Sorgulama Sayfası GÜNCELLENDİ ---
     @GetMapping("/sorgula")
     public String showCargoQueryPage(@ModelAttribute("searchCriteria") CargoSearchCriteria criteria,
                                      @RequestParam(defaultValue = "0") int page,
@@ -91,19 +117,18 @@ public class PanelController {
         addUserAuthInfoToModel(model, authentication);
         model.addAttribute("activePage", "sorgula");
 
-        // Sayfalama ve Sıralama (ID'ye göre tersten)
         Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "id"));
-
-        // Servisten sayfalanmış sonuçları al
         Page<CargoSearchResultDto> cargoPage = cargoService.searchCargos(criteria, pageable);
 
         model.addAttribute("kargoPage", cargoPage);
-        model.addAttribute("cargoStatuses", CargoStatus.values()); // Select için enumlar
-        // Arama kriterleri zaten @ModelAttribute ile modelde
+        // --- YENİ: Durum isimleri için Map'i ekle ---
+        model.addAttribute("statusDisplayMap", ORDERED_STATUS_DISPLAY_NAMES);
+        // ------------------------------------------
+        // searchCriteria zaten modelde
 
         return "panel-sorgula";
     }
-    // -------------------------------------------------------
+    // ---------------------------------------------
 
     @GetMapping("/kullanici-yonetimi")
     public String showUserManagementPage(Model model, Authentication authentication) { /* ... Önceki kod ... */
