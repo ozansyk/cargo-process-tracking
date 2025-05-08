@@ -2,9 +2,9 @@ package com.ozansoyak.cargo_process_tracking.controller;
 
 import com.ozansoyak.cargo_process_tracking.dto.*;
 import com.ozansoyak.cargo_process_tracking.model.enums.CargoStatus;
-import com.ozansoyak.cargo_process_tracking.service.CargoService; // Service importu
+import com.ozansoyak.cargo_process_tracking.service.CargoService;
 import jakarta.validation.Valid;
-import lombok.RequiredArgsConstructor; // Constructor injection için
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -24,90 +24,52 @@ import java.util.stream.Collectors;
 
 @Controller
 @RequestMapping("/panel")
-@RequiredArgsConstructor // Lombok ile constructor injection
+@RequiredArgsConstructor
 @Slf4j
 public class PanelController {
 
-    private final CargoService cargoService; // Servisi inject et
+    private final CargoService cargoService;
 
-    @GetMapping // "/panel" için varsayılan metot
-    public String showPanel(Model model, Authentication authentication) {
-        String username = "Kullanıcı";
-        String roles = "";
-
-        if (authentication != null && authentication.isAuthenticated()) {
-            Object principal = authentication.getPrincipal();
-            if (principal instanceof UserDetails) {
-                username = ((UserDetails) principal).getUsername();
-                roles = ((UserDetails) principal).getAuthorities().stream()
-                        .map(GrantedAuthority::getAuthority)
-                        .map(role -> role.startsWith("ROLE_") ? role.substring(5) : role)
-                        .collect(Collectors.joining(", "));
-            } else {
-                username = principal.toString();
-            }
-        }
-        model.addAttribute("username", username);
-        model.addAttribute("userRoles", roles);
-        model.addAttribute("activePage", "panel"); // Aktif sayfa
-
-        // --- YENİ: Panel verilerini servisten alıp modele ekle ---
+    @GetMapping
+    public String showPanel(Model model, Authentication authentication) { /* ... Önceki kod ... */
+        addUserAuthInfoToModel(model, authentication);
+        model.addAttribute("activePage", "panel");
         try {
             PanelDataDto panelData = cargoService.getPanelData();
             model.addAttribute("panelData", panelData);
         } catch (Exception e) {
-            // Hata durumunda paneli yine de göster ama logla ve belki bir hata mesajı ekle
             log.error("Panel verileri alınırken hata oluştu: {}", e.getMessage(), e);
             model.addAttribute("panelError", "Panel verileri yüklenirken bir sorun oluştu.");
-            // Boş bir DTO oluşturup gönderebiliriz ki Thymeleaf null hatası vermesin
             model.addAttribute("panelData", PanelDataDto.builder().recentActivities(List.of()).build());
         }
-        // --------------------------------------------------------
-
-        return "panel"; // resources/templates/panel.html
+        return "panel";
     }
 
-    // --- Diğer Panel Sayfaları İçin Metodlar ---
-    // (Bunlar önceki cevapta olduğu gibi kalabilir)
-
-    // --- showNewCargoForm METODU GÜNCELLENDİ ---
     @GetMapping("/yeni-kargo")
-    public String showNewCargoForm(Model model, Authentication authentication) {
+    public String showNewCargoForm(Model model, Authentication authentication) { /* ... Önceki kod ... */
         addUserAuthInfoToModel(model, authentication);
         model.addAttribute("activePage", "yeniKargo");
-
-        // --- DÜZELTME: Forma bağlanacak nesneyi modele ekle ---
-        // Eğer modelde zaten redirect'ten gelen bir attribute yoksa, yenisini ekle.
-        // Bu, validation hatası sonrası geri dönüldüğünde girilen değerlerin korunmasını da sağlar.
         if (!model.containsAttribute("createCargoRequest")) {
             model.addAttribute("createCargoRequest", new CreateCargoRequest());
         }
-        // -----------------------------------------------------
-
-        return "panel-yeni-kargo"; // template adı doğru varsayılıyor
+        return "panel-yeni-kargo";
     }
 
-    // --- processNewCargoForm METODU (Aynı kalır) ---
     @PostMapping("/yeni-kargo")
     public String processNewCargoForm(@Valid @ModelAttribute("createCargoRequest") CreateCargoRequest request,
                                       BindingResult bindingResult,
-                                      RedirectAttributes redirectAttributes,
-                                      Model model, Authentication authentication) {
-
+                                      Model model,
+                                      Authentication authentication) { /* ... Önceki kod ... */
         addUserAuthInfoToModel(model, authentication);
         model.addAttribute("activePage", "yeniKargo");
-
         if (bindingResult.hasErrors()) {
             log.warn("Yeni kargo formu validation hataları içeriyor.");
-            // Model'e "createCargoRequest" ve "bindingResult" zaten otomatik eklenir,
-            // bu yüzden formu tekrar göstermek yeterli.
             return "panel-yeni-kargo";
         }
-
         try {
             CargoResponse response = cargoService.createCargoAndStartProcess(request);
             log.info("Yeni kargo başarıyla oluşturuldu. Takip No: {}", response.getTrackingNumber());
-            model.addAttribute("showSuccessModal", true); // Modal'ı tetiklemek için flag
+            model.addAttribute("showSuccessModal", true);
             model.addAttribute("successMessage", "Kargo başarıyla kaydedildi!");
             model.addAttribute("trackingNumber", response.getTrackingNumber());
             model.addAttribute("createCargoRequest", new CreateCargoRequest());
@@ -115,47 +77,43 @@ public class PanelController {
         } catch (Exception e) {
             log.error("Yeni kargo kaydedilirken hata oluştu: {}", e.getMessage(), e);
             model.addAttribute("formError", "Kargo kaydedilirken beklenmedik bir hata oluştu: " + e.getMessage());
-            // Hata durumunda da formun bağlı olduğu nesne modelde kalmalı (ki girilenler kaybolmasın)
-            // @ModelAttribute sayesinde bu zaten modelde mevcut.
             return "panel-yeni-kargo";
         }
     }
 
-    // --- YENİ: Kargo Sorgulama Sayfası ---
+    // --- Kargo Sorgulama Sayfası (Pageable ve Kriterler) ---
     @GetMapping("/sorgula")
-    public String showCargoQueryPage(@ModelAttribute("searchCriteria") CargoSearchCriteria criteria, // Form binding için
+    public String showCargoQueryPage(@ModelAttribute("searchCriteria") CargoSearchCriteria criteria,
                                      @RequestParam(defaultValue = "0") int page,
                                      @RequestParam(defaultValue = "10") int size,
-                                     // @RequestParam(defaultValue = "id,desc") String sort, // Şimdilik basit sıralama
                                      Model model, Authentication authentication) {
 
         addUserAuthInfoToModel(model, authentication);
         model.addAttribute("activePage", "sorgula");
 
-        // Sayfalama ve Sıralama
-        // TODO: Sort parametresini dinamik yap
-        Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "id")); // Veya lastUpdatedAt
+        // Sayfalama ve Sıralama (ID'ye göre tersten)
+        Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "id"));
 
         // Servisten sayfalanmış sonuçları al
         Page<CargoSearchResultDto> cargoPage = cargoService.searchCargos(criteria, pageable);
 
-        model.addAttribute("kargoPage", cargoPage); // Sayfalama bilgisiyle birlikte
-        model.addAttribute("cargoStatuses", CargoStatus.values()); // Durum filtresi için enum değerleri
-        // Arama kriterlerini tekrar modele eklemeye gerek yok, @ModelAttribute hallediyor.
-        // model.addAttribute("searchCriteria", criteria);
+        model.addAttribute("kargoPage", cargoPage);
+        model.addAttribute("cargoStatuses", CargoStatus.values()); // Select için enumlar
+        // Arama kriterleri zaten @ModelAttribute ile modelde
 
-        return "panel-sorgula"; // Yeni HTML dosyasının adı
+        return "panel-sorgula";
     }
+    // -------------------------------------------------------
 
     @GetMapping("/kullanici-yonetimi")
-    public String showUserManagementPage(Model model, Authentication authentication) {
+    public String showUserManagementPage(Model model, Authentication authentication) { /* ... Önceki kod ... */
         addUserAuthInfoToModel(model, authentication);
         model.addAttribute("activePage", "kullaniciYonetimi");
         return "panel-kullanici-yonetimi";
     }
 
-    // Tekrarlanan kodu azaltmak için yardımcı metot
-    private void addUserAuthInfoToModel(Model model, Authentication authentication) {
+    // Yardımcı metot
+    private void addUserAuthInfoToModel(Model model, Authentication authentication) { /* ... Önceki kod ... */
         String username = "Kullanıcı";
         String roles = "";
         if (authentication != null && authentication.isAuthenticated()) {
@@ -173,5 +131,4 @@ public class PanelController {
         model.addAttribute("username", username);
         model.addAttribute("userRoles", roles);
     }
-
 }

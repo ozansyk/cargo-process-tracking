@@ -13,10 +13,9 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.camunda.bpm.engine.*;
 import org.camunda.bpm.engine.history.HistoricActivityInstance;
-import org.camunda.bpm.engine.history.HistoricProcessInstance; // Business Key için eklendi
+import org.camunda.bpm.engine.history.HistoricProcessInstance;
 import org.camunda.bpm.engine.runtime.ProcessInstance;
 import org.camunda.bpm.engine.task.Task;
-// Camunda Model API importları
 import org.camunda.bpm.model.bpmn.BpmnModelInstance;
 import org.camunda.bpm.model.bpmn.instance.ExtensionElements;
 import org.camunda.bpm.model.bpmn.instance.UserTask;
@@ -45,14 +44,13 @@ public class CargoServiceImpl implements CargoService {
     private final CargoRepository cargoRepository;
     private final RuntimeService runtimeService;
     private final TaskService taskService;
-    private final RepositoryService repositoryService; // Model API için eklendi
+    private final RepositoryService repositoryService;
     private final HistoryService historyService;
 
     private static final String CAMUNDA_PROCESS_DEFINITION_KEY = "cargoTrackingProcessV2";
     private static final int MAX_TRACKING_NUMBER_ATTEMPTS = 10;
-    private static final String NEXT_STEP_VARIABLE_PROPERTY_NAME = "nextStepVariable"; // User Task Extension Property adı
+    private static final String NEXT_STEP_VARIABLE_PROPERTY_NAME = "nextStepVariable";
 
-    // Geçmişte göstermek istediğimiz Service Task ID'leri (Java'da filtrelemek için)
     private static final Set<String> TRACKING_ACTIVITY_IDS = Set.of(
             "task_UpdateStatusReceived",
             "task_UpdateStatusLoaded1",
@@ -65,9 +63,123 @@ public class CargoServiceImpl implements CargoService {
     );
 
     @Override
+    @Transactional(readOnly = true)
+    public Page<CargoSearchResultDto> searchCargos(CargoSearchCriteria criteria, Pageable pageable) {
+        log.info("Kargo arama isteği alındı. Kriterler: {}, Sayfalama: {}", criteria, pageable);
+        Specification<Cargo> spec = CargoSpecification.findByCriteria(criteria);
+        Page<Cargo> cargoPage = cargoRepository.findAll(spec, pageable);
+        log.info("{} adet kargo bulundu (Toplam: {}).", cargoPage.getNumberOfElements(), cargoPage.getTotalElements());
+        List<CargoSearchResultDto> resultList = cargoPage.getContent().stream()
+                .map(this::mapCargoToSearchResultDto)
+                .collect(Collectors.toList());
+        return new PageImpl<>(resultList, pageable, cargoPage.getTotalElements());
+    }
+
+    private CargoSearchResultDto mapCargoToSearchResultDto(Cargo cargo) {
+        boolean isCompletable = false;
+        boolean isCancellable = cargo.getCurrentStatus() != CargoStatus.DELIVERED &&
+                cargo.getCurrentStatus() != CargoStatus.CANCELLED;
+        if (isCancellable && cargo.getProcessInstanceId() != null) {
+            long activeTaskCount = taskService.createTaskQuery()
+                    .processInstanceId(cargo.getProcessInstanceId())
+                    .active()
+                    .count();
+            isCompletable = activeTaskCount > 0;
+        }
+
+        return CargoSearchResultDto.builder()
+                .trackingNumber(cargo.getTrackingNumber())
+                .senderName(cargo.getSenderName())
+                .receiverName(cargo.getReceiverName())
+                .receiverCity(cargo.getReceiverCity())
+                .currentStatus(getStatusDisplayName(cargo.getCurrentStatus()))
+                .currentStatusBadgeClass(getStatusBadgeClass(cargo.getCurrentStatus()))
+                .lastUpdateTime(cargo.getLastUpdatedAt())
+                .cancellable(isCancellable)
+                .completable(isCompletable)
+                .build();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public TrackingInfoResponse getTrackingInfo(String trackingNumber) {
+        log.info("Takip numarası '{}' için kargo bilgisi (detaylı) sorgulanıyor.", trackingNumber);
+        Cargo cargo = cargoRepository.findByTrackingNumber(trackingNumber)
+                .orElseThrow(() -> new EntityNotFoundException("Takip numarası ile kargo bulunamadı: " + trackingNumber));
+
+        List<TrackingHistoryEvent> historyEvents = getCargoHistory(cargo);
+
+        boolean isCompletable = false;
+        boolean isCancellable = cargo.getCurrentStatus() != CargoStatus.DELIVERED &&
+                cargo.getCurrentStatus() != CargoStatus.CANCELLED;
+        if (isCancellable && cargo.getProcessInstanceId() != null) {
+            long activeTaskCount = taskService.createTaskQuery()
+                    .processInstanceId(cargo.getProcessInstanceId())
+                    .active()
+                    .count();
+            isCompletable = activeTaskCount > 0;
+        }
+
+        return TrackingInfoResponse.builder()
+                .trackingNumber(cargo.getTrackingNumber())
+                .currentStatus(getStatusDisplayName(cargo.getCurrentStatus()))
+                .currentStatusBadgeClass(getStatusBadgeClass(cargo.getCurrentStatus()))
+                .senderCity(cargo.getSenderCity())
+                .receiverCity(cargo.getReceiverCity())
+                .processInstanceId(cargo.getProcessInstanceId())
+                .historyEvents(historyEvents)
+                .found(true)
+                // --- DTO'ya eklenen alanları doldur ---
+                .senderName(cargo.getSenderName())
+                .receiverName(cargo.getReceiverName())
+                .senderPhone(cargo.getSenderPhone())
+                .receiverPhone(cargo.getReceiverPhone())
+                .senderAddress(cargo.getSenderAddress()) // Adresler eklendi
+                .receiverAddress(cargo.getReceiverAddress())
+                .weight(cargo.getWeight())
+                .dimensions(cargo.getDimensions())
+                .contentDescription(cargo.getContentDescription())
+                .completable(isCompletable)
+                .cancellable(isCancellable)
+                // ------------------------------------
+                .build();
+    }
+
+    private List<TrackingHistoryEvent> getCargoHistory(Cargo cargo) {
+        if (cargo.getProcessInstanceId() == null) {
+            log.warn("Takip numarası '{}' için süreç ID'si bulunamadığından geçmiş bilgisi alınamadı.", cargo.getTrackingNumber());
+            return List.of();
+        }
+        try {
+            List<HistoricActivityInstance> activityInstances = historyService.createHistoricActivityInstanceQuery()
+                    .processInstanceId(cargo.getProcessInstanceId())
+                    .activityType("serviceTask")
+                    .orderByHistoricActivityInstanceStartTime().asc()
+                    .list();
+            return activityInstances.stream()
+                    .filter(activity -> TRACKING_ACTIVITY_IDS.contains(activity.getActivityId()))
+                    .map(activity -> {
+                        String activityName = activity.getActivityName() != null ? activity.getActivityName() : "Bilinmeyen Aktivite";
+                        String statusDesc = extractStatusFromActivityName(activityName);
+                        String location = extractLocationFromActivityName(activityName);
+                        LocalDateTime timestamp = convertDateToLocalDateTime(activity.getStartTime());
+                        CargoStatus statusEnum = findStatusByActivityName(activityName);
+                        String badgeClass = getStatusBadgeClass(statusEnum);
+                        return new TrackingHistoryEvent(timestamp, statusDesc, badgeClass, location); // Badge class içeren DTO
+                    })
+                    .collect(Collectors.toList());
+        } catch (Exception e) {
+            log.error("Takip numarası '{}', PI_ID '{}' için Camunda geçmişi alınırken hata: {}",
+                    cargo.getTrackingNumber(), cargo.getProcessInstanceId(), e.getMessage(), e);
+            return List.of();
+        }
+    }
+
+    // ... (createCargoAndStartProcess, cancelCargoProcess, completeUserTaskAndPrepareNextStep, getPanelData, helper metotlar, generateUniqueTrackingNumber ÖNCEKİ CEVAPLARDAKİ GİBİ KALIR)...
+    // Önceki cevaplarda verilen kodları buraya ekleyin.
+    @Override
     @Transactional
-    public CargoResponse createCargoAndStartProcess(CreateCargoRequest request) {
-        // Sizin sağladığınız kodla aynı
+    public CargoResponse createCargoAndStartProcess(CreateCargoRequest request) { /* ... Önceki kod ... */
         log.info("Yeni kargo oluşturma ve '{}' süreci başlatma isteği.", CAMUNDA_PROCESS_DEFINITION_KEY);
         String trackingNumber = generateUniqueTrackingNumber();
         log.debug("Takip numarası üretildi: {}", trackingNumber);
@@ -120,8 +232,7 @@ public class CargoServiceImpl implements CargoService {
 
     @Override
     @Transactional
-    public void cancelCargoProcess(String trackingNumber) {
-        // Sizin sağladığınız kodla aynı
+    public void cancelCargoProcess(String trackingNumber) { /* ... Önceki kod ... */
         log.info("{} takip numaralı kargo için iptal işlemi başlatıldı.", trackingNumber);
         Cargo cargo = cargoRepository.findByTrackingNumber(trackingNumber)
                 .orElseThrow(() -> {
@@ -192,17 +303,15 @@ public class CargoServiceImpl implements CargoService {
         }
     }
 
-
     @Override
     @Transactional
-    public void completeUserTaskAndPrepareNextStep(String trackingNumber) {
-        // Sizin sağladığınız kodla aynı
+    public void completeUserTaskAndPrepareNextStep(String trackingNumber) { /* ... Önceki kod ... */
         log.info("{} takip numaralı kargo için aktif görevi tamamlama ve sonraki adımı hazırlama isteği.", trackingNumber);
         Cargo cargo = cargoRepository.findByTrackingNumber(trackingNumber)
                 .orElseThrow(() -> new EntityNotFoundException("Takip numarası ile kargo bulunamadı: " + trackingNumber));
-        if (cargo.getCurrentStatus() == CargoStatus.CANCELLED || cargo.getCurrentStatus() == CargoStatus.DELIVERED) {
-            log.warn("complete-step: Kargo (Takip No: {}) zaten '{}' durumunda. Görev tamamlanamaz.", trackingNumber, cargo.getCurrentStatus());
-            throw new IllegalStateException("Kargo zaten " + cargo.getCurrentStatus() + " durumunda olduğu için işlem yapılamaz.");
+        if (cargo.getCurrentStatus() == CargoStatus.CANCELLED) { // Sadece iptali kontrol et
+            log.warn("complete-step: Kargo (Takip No: {}) zaten CANCELLED durumunda. Görev tamamlanamaz.", trackingNumber);
+            throw new IllegalStateException("Kargo zaten CANCELLED durumunda olduğu için işlem yapılamaz.");
         }
         String processInstanceId = cargo.getProcessInstanceId();
         if (processInstanceId == null) {
@@ -305,193 +414,46 @@ public class CargoServiceImpl implements CargoService {
 
     @Override
     @Transactional(readOnly = true)
-    public TrackingInfoResponse getTrackingInfo(String trackingNumber) {
-        // Sizin sağladığınız kodla aynı (Java'da filtreleme yapan)
-        log.info("Takip numarası '{}' için kargo bilgisi sorgulanıyor.", trackingNumber);
-        Cargo cargo = cargoRepository.findByTrackingNumber(trackingNumber)
-                .orElseThrow(() -> {
-                    log.warn("Takip numarası '{}' ile kargo bulunamadı.", trackingNumber);
-                    return new EntityNotFoundException("Takip numarası ile kargo bulunamadı: " + trackingNumber);
-                });
-        log.debug("Kargo bulundu: ID={}, Durum={}, PI_ID={}", cargo.getId(), cargo.getCurrentStatus(), cargo.getProcessInstanceId());
-        List<TrackingHistoryEvent> historyEvents = List.of();
-        if (cargo.getProcessInstanceId() != null) {
-            try {
-                List<HistoricActivityInstance> activityInstances = historyService.createHistoricActivityInstanceQuery()
-                        .processInstanceId(cargo.getProcessInstanceId())
-                        .activityType("serviceTask")
-                        .orderByHistoricActivityInstanceStartTime().asc()
-                        .list();
-                log.debug("Takip numarası '{}' için {} adet Service Task geçmiş aktivitesi bulundu (Filtrelemeden önce).", trackingNumber, activityInstances.size());
-                historyEvents = activityInstances.stream()
-                        .filter(activity -> TRACKING_ACTIVITY_IDS.contains(activity.getActivityId()))
-                        .map(activity -> {
-                            String activityName = activity.getActivityName() != null ? activity.getActivityName() : "Bilinmeyen Aktivite";
-                            String statusDesc = extractStatusFromActivityName(activityName);
-                            String location = extractLocationFromActivityName(activityName);
-                            LocalDateTime timestamp = convertDateToLocalDateTime(activity.getStartTime());
-                            return new TrackingHistoryEvent(timestamp, statusDesc, location);
-                        })
-                        .collect(Collectors.toList());
-                log.debug("Takip numarası '{}' için {} adet ilgili geçmiş aktivite bulundu (Filtrelemeden SONRA).", trackingNumber, historyEvents.size());
-            } catch (Exception e) {
-                log.error("Takip numarası '{}', PI_ID '{}' için Camunda geçmişi alınırken hata: {}",
-                        trackingNumber, cargo.getProcessInstanceId(), e.getMessage(), e);
-            }
-        } else {
-            log.warn("Takip numarası '{}' için süreç ID'si bulunamadığından geçmiş bilgisi alınamadı.", trackingNumber);
-        }
-        return TrackingInfoResponse.builder()
-                .trackingNumber(cargo.getTrackingNumber())
-                .currentStatus(getStatusDisplayName(cargo.getCurrentStatus()))
-                .currentStatusBadgeClass(getStatusBadgeClass(cargo.getCurrentStatus()))
-                .senderCity(cargo.getSenderCity())
-                .receiverCity(cargo.getReceiverCity())
-                .processInstanceId(cargo.getProcessInstanceId())
-                .historyEvents(historyEvents)
-                .found(true)
-                .build();
-    }
-
-    @Override
-    @Transactional(readOnly = true)
-    public PanelDataDto getPanelData() {
+    public PanelDataDto getPanelData() { /* ... Önceki kod ... */
         log.debug("Panel verileri sorgulanıyor...");
-
-        // 1. Widget Sayılarını Hesapla
-        long beklemedeAlinan = cargoRepository.countByCurrentStatusIn(
-                List.of(CargoStatus.PENDING, CargoStatus.RECEIVED)
-        );
-
-        // --- YENİ: Taşınma/Transfer durumlarını belirle ve say ---
-        List<CargoStatus> tasinmaTransferDurumlari = List.of(
-                CargoStatus.LOADED_ON_VEHICLE_1,
-                CargoStatus.AT_TRANSFER_CENTER,
-                CargoStatus.LOADED_ON_VEHICLE_2,
-                CargoStatus.AT_DISTRIBUTION_HUB
-        );
+        long beklemedeAlinan = cargoRepository.countByCurrentStatusIn(List.of(CargoStatus.PENDING, CargoStatus.RECEIVED));
+        List<CargoStatus> tasinmaTransferDurumlari = List.of(CargoStatus.LOADED_ON_VEHICLE_1, CargoStatus.AT_TRANSFER_CENTER, CargoStatus.LOADED_ON_VEHICLE_2, CargoStatus.AT_DISTRIBUTION_HUB);
         long tasiniyorTransferde = cargoRepository.countByCurrentStatusIn(tasinmaTransferDurumlari);
-        // ---------------------------------------------------------
-
         long dagitimda = cargoRepository.countByCurrentStatus(CargoStatus.OUT_FOR_DELIVERY);
         long teslimEdilen = cargoRepository.countByCurrentStatus(CargoStatus.DELIVERED);
         long iptalEdilen = cargoRepository.countByCurrentStatus(CargoStatus.CANCELLED);
-
-        // 2. Son İşlemleri Camunda Geçmişinden Al (Bu kısım aynı kalır)
         List<RecentActivityDto> recentActivities = List.of();
         try {
-            List<HistoricActivityInstance> lastActivities = historyService.createHistoricActivityInstanceQuery()
-                    .activityType("serviceTask")
-                    .orderByHistoricActivityInstanceEndTime().desc()
-                    .finished()
-                    .listPage(0, 10);
+            List<HistoricActivityInstance> lastActivities = historyService.createHistoricActivityInstanceQuery().activityType("serviceTask").orderByHistoricActivityInstanceEndTime().desc().finished().listPage(0, 10);
             log.debug("{} adet geçmiş bitmiş Service Task aktivitesi bulundu (Filtrelemeden önce).", lastActivities.size());
-            List<HistoricActivityInstance> filteredActivities = lastActivities.stream()
-                    .filter(activity -> TRACKING_ACTIVITY_IDS.contains(activity.getActivityId()))
-                    .toList();
-            Set<String> processInstanceIds = filteredActivities.stream()
-                    .map(HistoricActivityInstance::getProcessInstanceId)
-                    .collect(Collectors.toSet());
+            List<HistoricActivityInstance> filteredActivities = lastActivities.stream().filter(activity -> TRACKING_ACTIVITY_IDS.contains(activity.getActivityId())).collect(Collectors.toList());
+            Set<String> processInstanceIds = filteredActivities.stream().map(HistoricActivityInstance::getProcessInstanceId).collect(Collectors.toSet());
             final Map<String, String> processIdToBusinessKeyMap;
             if (!processInstanceIds.isEmpty()) {
-                List<HistoricProcessInstance> processInstances = historyService.createHistoricProcessInstanceQuery()
-                        .processInstanceIds(processInstanceIds)
-                        .list();
-                processIdToBusinessKeyMap = processInstances.stream()
-                        .filter(pi -> pi.getBusinessKey() != null)
-                        .collect(Collectors.toMap(
-                                HistoricProcessInstance::getId,
-                                HistoricProcessInstance::getBusinessKey,
-                                (key1, key2) -> key1
-                        ));
+                List<HistoricProcessInstance> processInstances = historyService.createHistoricProcessInstanceQuery().processInstanceIds(processInstanceIds).list();
+                processIdToBusinessKeyMap = processInstances.stream().filter(pi -> pi.getBusinessKey() != null).collect(Collectors.toMap(HistoricProcessInstance::getId, HistoricProcessInstance::getBusinessKey, (key1, key2) -> key1));
                 log.debug("{} adet process instance için business key bulundu.", processIdToBusinessKeyMap.size());
             } else {
                 processIdToBusinessKeyMap = Collections.emptyMap();
             }
-            recentActivities = filteredActivities.stream()
-                    .map(activity -> {
-                        String activityName = activity.getActivityName() != null ? activity.getActivityName() : "Bilinmeyen İşlem";
-                        String statusDesc = extractStatusFromActivityName(activityName);
-                        LocalDateTime timestamp = convertDateToLocalDateTime(activity.getEndTime());
-                        String trackingNo = processIdToBusinessKeyMap.getOrDefault(activity.getProcessInstanceId(), "-");
-                        CargoStatus statusEnum = findStatusByActivityName(activityName);
-                        String badgeClass = getStatusBadgeClass(statusEnum);
-                        return new RecentActivityDto(trackingNo, statusDesc, badgeClass, timestamp);
-                    })
-                    .collect(Collectors.toList());
+            recentActivities = filteredActivities.stream().map(activity -> {
+                String activityName = activity.getActivityName() != null ? activity.getActivityName() : "Bilinmeyen İşlem";
+                String statusDesc = extractStatusFromActivityName(activityName);
+                LocalDateTime timestamp = convertDateToLocalDateTime(activity.getEndTime());
+                String trackingNo = processIdToBusinessKeyMap.getOrDefault(activity.getProcessInstanceId(), "-");
+                CargoStatus statusEnum = findStatusByActivityName(activityName);
+                String badgeClass = getStatusBadgeClass(statusEnum);
+                return new RecentActivityDto(trackingNo, statusDesc, badgeClass, timestamp);
+            }).collect(Collectors.toList());
             log.debug("{} adet ilgili son işlem bulundu (Filtrelemeden SONRA).", recentActivities.size());
         } catch (Exception e) {
             log.error("Son işlemler alınırken Camunda geçmiş sorgusunda hata oluştu: {}", e.getMessage(), e);
         }
-
-        // 3. Panel DTO'sunu Oluştur ve Döndür (Yeni alanı ekle)
-        return PanelDataDto.builder()
-                .beklemedeAlinanCount(beklemedeAlinan)
-                .tasiniyorTransferdeCount(tasiniyorTransferde) // YENİ
-                .dagitimdaCount(dagitimda)
-                .teslimEdilenCount(teslimEdilen)
-                .iptalEdilenCount(iptalEdilen)
-                .recentActivities(recentActivities)
-                .build();
+        return PanelDataDto.builder().beklemedeAlinanCount(beklemedeAlinan).tasiniyorTransferdeCount(tasiniyorTransferde).dagitimdaCount(dagitimda).teslimEdilenCount(teslimEdilen).iptalEdilenCount(iptalEdilen).recentActivities(recentActivities).build();
     }
 
-    // --- YENİ ARAMA METODU ---
-    @Override
-    @Transactional(readOnly = true)
-    public Page<CargoSearchResultDto> searchCargos(CargoSearchCriteria criteria, Pageable pageable) {
-        log.info("Kargo arama isteği alındı. Kriterler: {}, Sayfalama: {}", criteria, pageable);
-
-        // 1. Specification oluştur
-        Specification<Cargo> spec = CargoSpecification.findByCriteria(criteria);
-
-        // 2. Repository'den sayfalanmış veriyi çek
-        Page<Cargo> cargoPage = cargoRepository.findAll(spec, pageable);
-        log.info("{} adet kargo bulundu (Toplam: {}).", cargoPage.getNumberOfElements(), cargoPage.getTotalElements());
-
-        // 3. Page<Cargo> -> Page<CargoSearchResultDto> dönüşümü yap
-        List<CargoSearchResultDto> resultList = cargoPage.getContent().stream()
-                .map(this::mapCargoToSearchResultDto) // Dönüşüm için helper metot
-                .collect(Collectors.toList());
-
-        return new PageImpl<>(resultList, pageable, cargoPage.getTotalElements());
-    }
-
-    // --- Yardımcı Metotlar (Sizin Kodunuzla Aynı) ---
-
-    // Cargo'yu CargoSearchResultDto'ya mapleyen yardımcı metot
-    private CargoSearchResultDto mapCargoToSearchResultDto(Cargo cargo) {
-        // İlerletilebilir mi? (Aktif user task var mı?)
-        boolean isCompletable = false;
-        if (cargo.getProcessInstanceId() != null &&
-                cargo.getCurrentStatus() != CargoStatus.DELIVERED &&
-                cargo.getCurrentStatus() != CargoStatus.CANCELLED) {
-            // Aktif user task var mı diye hızlıca kontrol et
-            long activeTaskCount = taskService.createTaskQuery()
-                    .processInstanceId(cargo.getProcessInstanceId())
-                    .active()
-                    .count();
-            isCompletable = activeTaskCount > 0;
-        }
-
-        // İptal edilebilir mi? (Henüz teslim edilmedi veya iptal edilmediyse)
-        boolean isCancellable = cargo.getCurrentStatus() != CargoStatus.DELIVERED &&
-                cargo.getCurrentStatus() != CargoStatus.CANCELLED;
-
-        // DTO'yu oluştur
-        return CargoSearchResultDto.builder()
-                .trackingNumber(cargo.getTrackingNumber())
-                .senderName(cargo.getSenderName()) // Sadece isim yeterli olabilir
-                .receiverName(cargo.getReceiverName())
-                .receiverCity(cargo.getReceiverCity())
-                .currentStatus(getStatusDisplayName(cargo.getCurrentStatus()))
-                .currentStatusBadgeClass(getStatusBadgeClass(cargo.getCurrentStatus()))
-                .lastUpdateTime(cargo.getLastUpdatedAt()) // Veya createdAt, hangisi varsa
-                .cancellable(isCancellable)
-                .completable(isCompletable)
-                .build();
-    }
-
-    private CargoStatus findStatusByActivityName(String activityName) {
+    // --- Yardımcı Metotlar (Aynı) ---
+    private CargoStatus findStatusByActivityName(String activityName) { /* ... Önceki kod ... */
         if (activityName == null) return null;
         if (activityName.contains("Kargo Alındı")) return CargoStatus.RECEIVED;
         if (activityName.contains("İlk Araca Yüklendi")) return CargoStatus.LOADED_ON_VEHICLE_1;
@@ -503,8 +465,7 @@ public class CargoServiceImpl implements CargoService {
         if (activityName.contains("İptal Edildi")) return CargoStatus.CANCELLED;
         return null;
     }
-
-    private String extractStatusFromActivityName(String activityName) {
+    private String extractStatusFromActivityName(String activityName) { /* ... Önceki kod ... */
         if (activityName == null) return "Bilinmeyen Durum";
         if (activityName.contains(":")) {
             return activityName.substring(activityName.indexOf(":") + 1).trim();
@@ -514,8 +475,7 @@ public class CargoServiceImpl implements CargoService {
         }
         return activityName;
     }
-
-    private String extractLocationFromActivityName(String activityName) {
+    private String extractLocationFromActivityName(String activityName) { /* ... Önceki kod ... */
         if (activityName != null) {
             if (activityName.contains("Transfer Merkezi")) return "Transfer Merkezi";
             if (activityName.contains("Dağıtım Bölgesi")) return "Dağıtım Bölgesi";
@@ -528,14 +488,12 @@ public class CargoServiceImpl implements CargoService {
         }
         return "-";
     }
-
-    private LocalDateTime convertDateToLocalDateTime(Date date) {
+    private LocalDateTime convertDateToLocalDateTime(Date date) { /* ... Önceki kod ... */
         return date == null ? null : date.toInstant()
                 .atZone(ZoneId.systemDefault())
                 .toLocalDateTime();
     }
-
-    private String getStatusDisplayName(CargoStatus status) {
+    private String getStatusDisplayName(CargoStatus status) { /* ... Önceki kod ... */
         if (status == null) return "Bilinmiyor";
         return switch (status) {
             case PENDING -> "Beklemede";
@@ -550,21 +508,18 @@ public class CargoServiceImpl implements CargoService {
             default -> status.name();
         };
     }
-
-    private String getStatusBadgeClass(CargoStatus status) {
+    private String getStatusBadgeClass(CargoStatus status) { /* ... Önceki kod ... */
         if (status == null) return "bg-secondary";
         return switch (status) {
             case PENDING, RECEIVED -> "bg-secondary";
             case LOADED_ON_VEHICLE_1, AT_TRANSFER_CENTER, LOADED_ON_VEHICLE_2, AT_DISTRIBUTION_HUB -> "bg-primary";
-            case OUT_FOR_DELIVERY -> "bg-info";
+            case OUT_FOR_DELIVERY -> "bg-info text-dark";
             case DELIVERED -> "bg-success";
             case CANCELLED -> "bg-danger";
             default -> "bg-dark";
         };
     }
-
-    private String generateUniqueTrackingNumber() {
-        // Sizin sağladığınız kodla aynı
+    private String generateUniqueTrackingNumber() { /* ... Önceki kod ... */
         for (int i = 0; i < MAX_TRACKING_NUMBER_ATTEMPTS; i++) {
             String prefix = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyMMddHH"));
             long randomSuffix = ThreadLocalRandom.current().nextLong(10000, 100000);
@@ -579,4 +534,5 @@ public class CargoServiceImpl implements CargoService {
         log.error("{} denemede benzersiz takip numarası üretilemedi.", MAX_TRACKING_NUMBER_ATTEMPTS);
         throw new TrackingNumberGenerationException("Benzersiz takip numarası " + MAX_TRACKING_NUMBER_ATTEMPTS + " denemede üretilemedi.");
     }
-}
+
+} // Class sonu

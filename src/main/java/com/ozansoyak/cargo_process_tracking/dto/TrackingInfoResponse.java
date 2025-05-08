@@ -10,21 +10,33 @@ import java.util.List;
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
-@Builder // Builder pattern eklemek kullanımı kolaylaştırabilir
+@Builder
 public class TrackingInfoResponse {
     private String trackingNumber;
-    private String currentStatus; // Enum adı veya daha kullanıcı dostu bir metin olabilir
-    private String currentStatusBadgeClass; // Duruma göre bootstrap badge class'ı
+    private String currentStatus;
+    private String currentStatusBadgeClass;
     private String senderCity;
     private String receiverCity;
-    private String processInstanceId; // Teknik bilgi, isteğe bağlı
+    private String processInstanceId;
     private List<TrackingHistoryEvent> historyEvents;
 
-    // Hata durumunu belirtmek için (opsiyonel, controller'da da yönetilebilir)
+    // --- Modal için Alanlar ---
+    private String senderName;
+    private String receiverName;
+    private String senderPhone;
+    private String receiverPhone;
+    private String senderAddress; // Eklendi
+    private String receiverAddress; // Eklendi
+    private Double weight;
+    private String dimensions;
+    private String contentDescription;
+    private boolean completable;
+    private boolean cancellable;
+    // -------------------------
+
     private boolean found = true;
     private String errorMessage;
 
-    // Sadece hata durumu için basit bir constructor
     public TrackingInfoResponse(boolean found, String errorMessage) {
         this.found = found;
         this.errorMessage = errorMessage;
