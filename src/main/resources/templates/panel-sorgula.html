@@ -31,7 +31,6 @@
         #modalContentArea p { margin-bottom: 0.5rem; }
         #modalContentArea h5 { margin-top: 1rem; margin-bottom: 0.25rem; font-size: 1rem; color: #6c757d;}
         #modalContentArea h5:first-of-type { margin-top: 0; }
-        /* Buton içindeki spinner ve ikon için */
         .btn .spinner-border-sm { display: none; }
         .btn .icon-idle { display: inline-block; }
         .btn.loading .spinner-border-sm { display: inline-block; }
@@ -103,7 +102,6 @@
                             <label for="statusFilter" class="form-label">Durum</label>
                             <select id="statusFilter" class="form-select form-select-sm" th:field="*{statusFilter}">
                                 <option value="">Tümü</option>
-                                <!-- #strings.capitalizeWords kullanımı düzeltildi -->
                                 <option th:each="status : ${cargoStatuses}"
                                         th:value="${status.name()}"
                                         th:text="${#strings.capitalizeWords(#strings.toLowerCase(status.name()).replace('_',' '))}">Durum Metni
@@ -145,12 +143,14 @@
                         <td><span class="badge fs-6" th:classappend="${kargo.currentStatusBadgeClass}" th:text="${kargo.currentStatus}"></span></td>
                         <td th:text="${kargo.lastUpdateTime != null ? #temporals.format(kargo.lastUpdateTime, 'dd.MM.yy HH:mm') : '-'}"></td>
                         <td class="text-center">
-                            <button class="btn btn-sm btn-outline-primary px-2 py-1" <!-- Padding ayarlandı -->
-                            th:id="'detailBtn-' + ${kargo.trackingNumber}"
-                            th:attr="data-tracking-number=${kargo.trackingNumber}"
-                            onclick="openDetailModal(this.getAttribute('data-tracking-number'))">
-                            <i class="bi bi-pencil-square"></i>
+                            <!-- *** DÜZELTME: HTML Yorumu kaldırıldı ve > eklendi *** -->
+                            <button class="btn btn-sm btn-outline-primary px-2 py-1"
+                                    th:id="'detailBtn-' + ${kargo.trackingNumber}"
+                                    th:attr="data-tracking-number=${kargo.trackingNumber}"
+                                    onclick="openDetailModal(this.getAttribute('data-tracking-number'))">
+                                <i class="bi bi-pencil-square"></i>
                             </button>
+                            <!-- ***************************************************** -->
                         </td>
                     </tr>
                     </tbody>
@@ -212,21 +212,20 @@
                         <li class="nav-item" role="presentation"> <button class="nav-link" id="history-tab-btn" data-bs-toggle="tab" data-bs-target="#history-tab-pane" type="button" role="tab">Hareketler</button> </li>
                         <li class="nav-item" role="presentation"> <button class="nav-link" id="update-tab-btn" data-bs-toggle="tab" data-bs-target="#update-tab-pane" type="button" role="tab">İşlemler</button> </li>
                     </ul>
-                    <div class="tab-content pt-2" id="cargoTabContent"> <!-- pt-2 eklendi -->
+                    <div class="tab-content pt-2" id="cargoTabContent">
                         <div class="tab-pane fade show active" id="general-tab-pane" role="tabpanel" aria-labelledby="general-tab-btn" tabindex="0">
-                            <!-- Düzeltilmiş ID'ler ve içerik -->
                             <div class="row">
                                 <div class="col-md-6">
                                     <h5>Gönderici Bilgileri</h5>
                                     <p id="modalSenderName" class="mb-1">-</p>
                                     <p id="modalSenderPhone" class="text-muted small mb-1">-</p>
-                                    <p id="modalSenderAddress" class="text-muted small">-</p> <!-- Adres eklendi -->
+                                    <p id="modalSenderAddress" class="text-muted small">-</p>
                                 </div>
                                 <div class="col-md-6">
                                     <h5>Alıcı Bilgileri</h5>
                                     <p id="modalReceiverName" class="mb-1">-</p>
                                     <p id="modalReceiverPhone" class="text-muted small mb-1">-</p>
-                                    <p id="modalReceiverAddress" class="text-muted small">-</p> <!-- Adres eklendi -->
+                                    <p id="modalReceiverAddress" class="text-muted small">-</p>
                                 </div>
                             </div>
                             <hr>
@@ -271,6 +270,7 @@
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+<!-- Modal İşlemleri için JavaScript (Önceki cevapta verilen JS kodunun aynısı) -->
 <script th:inline="javascript">
     // Modal ve İçerik Elementleri
     const detailModalElement = document.getElementById('detailUpdateModal');
@@ -279,31 +279,26 @@
     const modalError = document.getElementById('modalErrorArea');
     const modalContent = document.getElementById('modalContentArea');
     const modalTrackingNumberSpan = document.getElementById('modalTrackingNumber');
-    // --- Düzeltilmiş Element Referansları ---
     const modalSenderName = document.getElementById('modalSenderName');
     const modalSenderPhone = document.getElementById('modalSenderPhone');
-    const modalSenderAddress = document.getElementById('modalSenderAddress'); // Adres eklendi
+    const modalSenderAddress = document.getElementById('modalSenderAddress');
     const modalReceiverName = document.getElementById('modalReceiverName');
     const modalReceiverPhone = document.getElementById('modalReceiverPhone');
-    const modalReceiverAddress = document.getElementById('modalReceiverAddress'); // Adres eklendi
+    const modalReceiverAddress = document.getElementById('modalReceiverAddress');
     const modalCargoDetails = document.getElementById('modalCargoDetails');
     const modalContentDesc = document.getElementById('modalContentDesc');
-    // -------------------------------------
     const modalHistoryTableBody = document.getElementById('modalHistoryTableBody');
     const modalCurrentStatusSpan = document.getElementById('modalCurrentStatus');
     const completeStepButton = document.getElementById('completeStepButton');
     const cancelCargoButton = document.getElementById('cancelCargoButton');
     const updateResultArea = document.getElementById('updateResultArea');
 
-    let currentTrackingNumber = null; // İşlem yapılan takip no
+    let currentTrackingNumber = null;
 
-    // Modal'ı açıp veri çeken fonksiyon
     function openDetailModal(trackingNumber) {
         if (!detailModal || !trackingNumber) return;
         currentTrackingNumber = trackingNumber;
         modalTrackingNumberSpan.textContent = trackingNumber;
-
-        // Durumu sıfırla
         modalError.style.display = 'none';
         modalError.textContent = '';
         modalContent.style.display = 'none';
@@ -313,22 +308,16 @@
         completeStepButton.disabled = true;
         cancelCargoButton.disabled = true;
         modalLoading.style.display = 'block';
-
-        // Aktif tab'ı sıfırla
         const firstTabButton = document.querySelector('#cargoTab button[data-bs-target="#general-tab-pane"]');
         if(firstTabButton) new bootstrap.Tab(firstTabButton).show();
-
         detailModal.show();
 
-        // --- DÜZELTME: API endpoint'i /api/cargos/track olmalı (CargoController'daki gibi) ---
-        // VEYA CargoController'daki endpoint /api/track olmalı. Mevcut kodunuza göre ayarlayın.
-        // Şimdilik /api/track varsayıyorum.
-        fetch(`/api/track?trackingNumber=${encodeURIComponent(trackingNumber)}`)
+        fetch(`/track?trackingNumber=${encodeURIComponent(trackingNumber)}`)
             .then(handleFetchResponse)
             .then(data => {
-                populateModal(data); // Modal'ı doldur
+                populateModal(data);
                 modalLoading.style.display = 'none';
-                modalContent.style.display = 'block'; // İçeriği göster
+                modalContent.style.display = 'block';
             })
             .catch(error => {
                 console.error("Modal veri çekme hatası:", error);
@@ -338,76 +327,59 @@
             });
     }
 
-    // Modal'ı gelen veriyle dolduran fonksiyon
     function populateModal(data) {
         if (!data) return;
-
-        // --- DÜZELTME: Yeni elementlere göre doldurma ---
         if(modalSenderName) modalSenderName.textContent = data.senderName || '-';
         if(modalSenderPhone) modalSenderPhone.textContent = data.senderPhone || '-';
-        if(modalSenderAddress) modalSenderAddress.textContent = data.senderAddress || '-'; // Adresi ekle
+        if(modalSenderAddress) modalSenderAddress.textContent = data.senderAddress || '-';
         if(modalReceiverName) modalReceiverName.textContent = data.receiverName || '-';
         if(modalReceiverPhone) modalReceiverPhone.textContent = data.receiverPhone || '-';
-        if(modalReceiverAddress) modalReceiverAddress.textContent = data.receiverAddress || '-'; // Adresi ekle
+        if(modalReceiverAddress) modalReceiverAddress.textContent = data.receiverAddress || '-';
         if(modalCargoDetails) modalCargoDetails.textContent = `Ağırlık: ${data.weight || '?'} kg, Boyutlar: ${data.dimensions || '?'}`;
         if(modalContentDesc) modalContentDesc.textContent = `İçerik: ${data.contentDescription || '-'}`;
-        // ------------------------------------------------
 
-        // Hareketler
         modalHistoryTableBody.innerHTML = '';
         if (data.historyEvents && data.historyEvents.length > 0) {
-            // Sıralama backend'de yapıldı varsayılıyor
             data.historyEvents.forEach(event => {
                 const row = modalHistoryTableBody.insertRow();
                 row.insertCell().textContent = event.timestamp ? new Date(event.timestamp).toLocaleString('tr-TR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit'}) : '-';
-                // --- DÜZELTME: History DTO'sunda badge class olmalı ---
                 row.insertCell().innerHTML = `<span class="badge ${event.statusBadgeClass || 'bg-secondary'}">${event.statusDescription || '-'}</span>`;
-                // --------------------------------------------------
                 row.insertCell().textContent = event.location || '-';
             });
         } else {
             modalHistoryTableBody.innerHTML = '<tr><td colspan="3" class="text-center text-muted i">Hareket bulunamadı.</td></tr>';
         }
 
-        // İşlemler
         modalCurrentStatusSpan.textContent = data.currentStatus || 'Bilinmiyor';
         modalCurrentStatusSpan.className = `badge fs-6 ${data.currentStatusBadgeClass || 'bg-secondary'}`;
         completeStepButton.disabled = !(data.completable === true);
         cancelCargoButton.disabled = !(data.cancellable === true);
     }
 
-    // Aktif Adımı Tamamla işlemi
     function completeStep() {
         if (!currentTrackingNumber) return;
         setButtonLoading(completeStepButton, true, 'İşleniyor...');
-        setButtonLoading(cancelCargoButton, true); // Diğer butonu da kitle (disabled=true)
+        setButtonLoading(cancelCargoButton, true);
         updateResultArea.innerHTML = '';
 
-        // --- DÜZELTME: API endpoint'i /api/cargos/... olmalı ---
         fetch(`/api/cargos/${currentTrackingNumber}/complete-step`, { method: 'PUT' })
             .then(handleFetchResponse)
             .then(data => {
-                updateResultArea.innerHTML = `<div class="alert alert-success py-2 px-3">${data.message || 'Adım başarıyla tamamlandı!'}</div>`;
-                fetchDetailsAndUpdateModal(currentTrackingNumber); // Detayları yenile
+                // API text dönüyor olabilir, ona göre ayarla
+                let message = (typeof data === 'string' && data) ? data : (data.message || 'Adım başarıyla tamamlandı!');
+                updateResultArea.innerHTML = `<div class="alert alert-success py-2 px-3">${message}</div>`;
+                fetchDetailsAndUpdateModal(currentTrackingNumber);
             })
             .catch(error => {
                 console.error("Adım tamamlama hatası:", error);
                 updateResultArea.innerHTML = `<div class="alert alert-danger py-2 px-3">Hata: ${error.message}</div>`;
-                // Hata durumunda butonların durumunu yenilemek için tekrar fetch yapabiliriz veya manuel eski haline getirebiliriz
-                fetchDetailsAndUpdateModal(currentTrackingNumber); // Veriyi tekrar çekerek buton durumunu düzelt
-                // VEYA manuel olarak:
-                // resetButtonState(completeStepButton, 'Aktif Adımı Tamamla');
-                // resetButtonState(cancelCargoButton, 'Kargoyu İptal Et');
-                // openDetailModal(currentTrackingNumber); // Bu da seçenek
+                fetchDetailsAndUpdateModal(currentTrackingNumber);
             });
     }
 
-    // Kargo İptal işlemi
     function cancelCargo() {
         if (!currentTrackingNumber) return;
-        if (!confirm(`'${currentTrackingNumber}' takip numaralı kargoyu iptal etmek istediğinizden emin misiniz?\nBu işlem geri alınamaz!`)) {
-            return;
-        }
+        if (!confirm(`'${currentTrackingNumber}' takip numaralı kargoyu iptal etmek istediğinizden emin misiniz?\nBu işlem geri alınamaz!`)) return;
 
         setButtonLoading(cancelCargoButton, true, 'İptal Ediliyor...');
         setButtonLoading(completeStepButton, true);
@@ -416,27 +388,25 @@
         fetch(`/api/cargos/${currentTrackingNumber}/cancel`, { method: 'PUT' })
             .then(handleFetchResponse)
             .then(data => {
-                // API yanıtı text dönüyor, JSON değil. Başarı durumunda mesajı kendimiz yazalım.
-                updateResultArea.innerHTML = `<div class="alert alert-warning py-2 px-3">${data || 'Kargo iptal edildi/iptal işlemi başlatıldı.'}</div>`; // Uyarı rengi
-                fetchDetailsAndUpdateModal(currentTrackingNumber); // Detayları yenile
+                // API text dönüyor olabilir, ona göre ayarla
+                let message = (typeof data === 'string' && data) ? data : (data.message || 'Kargo iptal edildi/iptal işlemi başlatıldı.');
+                updateResultArea.innerHTML = `<div class="alert alert-warning py-2 px-3">${message}</div>`;
+                fetchDetailsAndUpdateModal(currentTrackingNumber);
             })
             .catch(error => {
                 console.error("Kargo iptal hatası:", error);
                 updateResultArea.innerHTML = `<div class="alert alert-danger py-2 px-3">Hata: ${error.message}</div>`;
-                fetchDetailsAndUpdateModal(currentTrackingNumber); // Hata olsa bile durumu yenile
+                fetchDetailsAndUpdateModal(currentTrackingNumber);
             });
     }
 
-    // Detayları tekrar çekip modalı güncelleyen fonksiyon
     function fetchDetailsAndUpdateModal(trackingNumber) {
-        // Yükleniyor göstermeden sadece içeriği güncelleyelim
-        fetch(`/api/track?trackingNumber=${encodeURIComponent(trackingNumber)}`)
+        fetch(`/track?trackingNumber=${encodeURIComponent(trackingNumber)}`)
             .then(handleFetchResponse)
             .then(data => {
                 populateModal(data);
-                resetButtonState(completeStepButton, 'Aktif Adımı Tamamla'); // Buton yazılarını sıfırla
+                resetButtonState(completeStepButton, 'Aktif Adımı Tamamla');
                 resetButtonState(cancelCargoButton, 'Kargoyu İptal Et');
-                // Buton disable durumlarını tekrar ayarla
                 completeStepButton.disabled = !(data.completable === true);
                 cancelCargoButton.disabled = !(data.cancellable === true);
             })
@@ -444,71 +414,60 @@
                 console.error("Modal yenileme hatası:", error);
                 modalError.textContent = `Detaylar yenilenemedi: ${error.message}`;
                 modalError.style.display = 'block';
-                // Butonları devre dışı bırak
                 completeStepButton.disabled = true;
                 cancelCargoButton.disabled = true;
             });
     }
 
-
-    // Tekrarlanan fetch yanıt işleme mantığı
     function handleFetchResponse(response) {
-        // Başarısız yanıtları ele al
         if (!response.ok) {
-            // Yanıt gövdesini text olarak okumayı dene (hem JSON hem düz metin için)
-            return response.text().then(text => {
+            return response.text().then(text => { // Önce text oku
                 let errorMessage = `İstek başarısız: ${response.status}`;
                 if (text) {
                     try {
-                        // JSON olarak parse etmeyi dene
-                        const errData = JSON.parse(text);
-                        errorMessage = errData.message || errData.error || text;
+                        const errData = JSON.parse(text); // JSON ise parse et
+                        errorMessage = errData.message || errData.error || text; // Mesajı al
                     } catch (e) {
-                        // JSON değilse, text'i olduğu gibi kullan
-                        errorMessage = text;
+                        errorMessage = text; // JSON değilse text'i kullan
                     }
                 }
                 throw new Error(errorMessage);
             });
         }
-        // Başarılı yanıtları JSON olarak parse et
+        // Yanıt OK ise JSON bekliyoruz
         return response.json().catch(e => {
-            console.error("JSON Parse hatası:", e);
+            console.error("JSON Parse hatası (Başarılı yanıtta):", e);
             throw new Error("Sunucudan gelen yanıt işlenemedi.");
         });
     }
 
-    // Butonun yükleniyor durumunu ayarlayan fonksiyon
     function setButtonLoading(button, isLoading, loadingText = 'İşleniyor...') {
         if (!button) return;
         const spinner = button.querySelector('.spinner-border-sm');
         const icon = button.querySelector('.icon-idle');
         const text = button.querySelector('.button-text');
-
         if (isLoading) {
             button.disabled = true;
             if(spinner) spinner.style.display = 'inline-block';
             if(icon) icon.style.display = 'none';
             if(text) text.textContent = loadingText;
         } else {
-            // Disabled durumu DTO'dan gelen değere göre ayarlanacak
-            // button.disabled = false;
+            // Disable durumu dışarıdan ayarlanacak (populateModal/fetchDetails...)
             if(spinner) spinner.style.display = 'none';
             if(icon) icon.style.display = 'inline-block';
-            // Orijinal metni geri yükle (resetButtonState içinde yapılıyor)
         }
     }
 
-    // Butonu başlangıç durumuna döndüren fonksiyon
     function resetButtonState(button, originalText) {
         if (!button) return;
-        // button.disabled = true; // Başlangıçta disable yapma, veri gelince ayarla
         const spinner = button.querySelector('.spinner-border-sm');
         const icon = button.querySelector('.icon-idle');
         const text = button.querySelector('.button-text');
         if(spinner) spinner.style.display = 'none';
         if(icon) icon.style.display = 'inline-block';
         if(text) text.textContent = originalText;
+        // Disable durumu dışarıdan ayarlanacak
+        // button.disabled = true;
     }
 
 </script>
