@@ -20,19 +20,22 @@ public class TrackingInfoResponse {
     private String processInstanceId;
     private List<TrackingHistoryEvent> historyEvents;
 
-    // --- Modal için Alanlar ---
     private String senderName;
     private String receiverName;
     private String senderPhone;
     private String receiverPhone;
-    private String senderAddress; // Eklendi
-    private String receiverAddress; // Eklendi
+    private String senderAddress;
+    private String receiverAddress;
     private Double weight;
     private String dimensions;
     private String contentDescription;
-    private boolean completable;
+    private boolean completable;    // Genel adım tamamlanabilir mi?
     private boolean cancellable;
-    // -------------------------
+
+    // --- YENİ ALANLAR: Aktif görev bilgisi için ---
+    private String activeTaskDefinitionKey; // Örn: "userTask_PhysicalReception"
+    private String activeTaskName;          // Örn: "Fiziksel Alımı Onayla"
+    // ---------------------------------------------
 
     private boolean found = true;
     private String errorMessage;

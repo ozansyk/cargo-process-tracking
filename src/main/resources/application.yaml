@@ -9,10 +9,13 @@ spring:
     username: ${POSTGRES_USER}
     password: ${POSTGRES_PASSWORD}
     driver-class-name: org.postgresql.Driver
+    hikari:
+      maximum-pool-size: 20
+      minimum-idle: 5
   jpa:
     hibernate:
       ddl-auto: update
-    show-sql: true
+    show-sql: false
     properties:
       hibernate:
         dialect: org.hibernate.dialect.PostgreSQLDialect
@@ -52,3 +55,11 @@ camunda:
     database:
       schema-update: true
       type: postgres
+    job-execution:
+      core-pool-size: 5
+      max-pool-size: 10
+      queue-capacity: 5
+      max-jobs-per-acquisition: 5
+      lock-time-in-millis: 300000
+      wait-time-in-millis: 5000
+      deployment-aware: true

@@ -1,0 +1,541 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<definitions xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:camunda="http://camunda.org/schema/1.0/bpmn" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:dc="http://www.omg.org/spec/DD/20100524/DC" xmlns:di="http://www.omg.org/spec/DD/20100524/DI" id="Definitions_CargoV3_FullyCorrected" targetNamespace="http://www.example.org/CargoTrackingV3FullyCorrected" exporter="Camunda Modeler" exporterVersion="5.34.0">
+  <process id="cargoTrackingProcessV3" name="Kargo Takip (Paralel Başlangıçlı V3 - Tam Düzeltilmiş)" isExecutable="true" camunda:historyTimeToLive="P30D">
+    <startEvent id="startEvent_CargoProcessStarted" name="Kargo Süreci Başladı" camunda:asyncBefore="true">
+      <outgoing>flow_to_InitialParallelSplit</outgoing>
+    </startEvent>
+    <sequenceFlow id="flow_to_InitialParallelSplit" sourceRef="startEvent_CargoProcessStarted" targetRef="gateway_InitialParallelSplit" />
+    <parallelGateway id="gateway_InitialParallelSplit" name="Kabul ve Fatura Görevleri">
+      <incoming>flow_to_InitialParallelSplit</incoming>
+      <outgoing>flow_to_PhysicalReceptionTask</outgoing>
+      <outgoing>flow_to_InvoiceCreationTask</outgoing>
+    </parallelGateway>
+    <sequenceFlow id="flow_to_PhysicalReceptionTask" sourceRef="gateway_InitialParallelSplit" targetRef="userTask_PhysicalReception" />
+    <userTask id="userTask_PhysicalReception" name="Fiziksel Alımı Onayla" camunda:candidateGroups="kargo-calisanlari">
+      <incoming>flow_to_PhysicalReceptionTask</incoming>
+      <outgoing>flow_from_PhysicalReception_to_Join</outgoing>
+    </userTask>
+    <sequenceFlow id="flow_from_PhysicalReception_to_Join" sourceRef="userTask_PhysicalReception" targetRef="gateway_InitialParallelJoin" />
+    <sequenceFlow id="flow_to_InvoiceCreationTask" sourceRef="gateway_InitialParallelSplit" targetRef="userTask_InvoiceCreation" />
+    <userTask id="userTask_InvoiceCreation" name="Faturayı Oluştur/Onayla" camunda:candidateGroups="muhasebe-ekibi">
+      <incoming>flow_to_InvoiceCreationTask</incoming>
+      <outgoing>flow_from_InvoiceCreation_to_Join</outgoing>
+    </userTask>
+    <sequenceFlow id="flow_from_InvoiceCreation_to_Join" sourceRef="userTask_InvoiceCreation" targetRef="gateway_InitialParallelJoin" />
+    <parallelGateway id="gateway_InitialParallelJoin" name="Kabul ve Fatura Tamamlandı">
+      <incoming>flow_from_PhysicalReception_to_Join</incoming>
+      <incoming>flow_from_InvoiceCreation_to_Join</incoming>
+      <outgoing>flow_join_to_updateStatus</outgoing>
+    </parallelGateway>
+    <sequenceFlow id="flow_join_to_updateStatus" sourceRef="gateway_InitialParallelJoin" targetRef="task_UpdateStatusReceived" />
+    <serviceTask id="task_UpdateStatusReceived" name="Durumu Güncelle: Kargo Alındı" camunda:delegateExpression="#{cargoStatusUpdater}">
+      <extensionElements>
+        <camunda:properties>
+          <camunda:property name="targetStatus" value="RECEIVED" />
+        </camunda:properties>
+      </extensionElements>
+      <incoming>flow_join_to_updateStatus</incoming>
+      <outgoing>flow_update_to_confirm</outgoing>
+    </serviceTask>
+    <sequenceFlow id="flow_update_to_confirm" sourceRef="task_UpdateStatusReceived" targetRef="userTask_ConfirmReceived" />
+    <userTask id="userTask_ConfirmReceived" name="Alındı Onayı ve İlerlet" camunda:candidateGroups="kargo-calisanlari">
+      <extensionElements>
+        <camunda:properties>
+          <camunda:property name="nextStepVariable" value="canProceedToLoaded1" />
+        </camunda:properties>
+      </extensionElements>
+      <incoming>flow_update_to_confirm</incoming>
+      <outgoing>flow_to_GatewayCheckCancel1</outgoing>
+    </userTask>
+    <sequenceFlow id="flow_to_GatewayCheckCancel1" sourceRef="userTask_ConfirmReceived" targetRef="gateway_CheckCancel1" />
+    <exclusiveGateway id="gateway_CheckCancel1" name="İptal/İlerleme Kontrolü 1">
+      <incoming>flow_to_GatewayCheckCancel1</incoming>
+      <outgoing>flow_to_UpdateStatusLoaded1</outgoing>
+      <outgoing>flow_Cancel1</outgoing>
+    </exclusiveGateway>
+    <sequenceFlow id="flow_to_UpdateStatusLoaded1" name="Devam" sourceRef="gateway_CheckCancel1" targetRef="task_UpdateStatusLoaded1">
+      <conditionExpression xsi:type="tFormalExpression">${(isCancelled == null || isCancelled == false) &amp;&amp; canProceedToLoaded1 == true}</conditionExpression>
+    </sequenceFlow>
+    <sequenceFlow id="flow_Cancel1" name="İptal" sourceRef="gateway_CheckCancel1" targetRef="task_UpdateStatusCancelled">
+      <conditionExpression xsi:type="tFormalExpression">${isCancelled == true}</conditionExpression>
+    </sequenceFlow>
+    <serviceTask id="task_UpdateStatusLoaded1" name="Durumu Güncelle: İlk Araca Yüklendi" camunda:delegateExpression="#{cargoStatusUpdater}">
+      <extensionElements>
+        <camunda:properties>
+          <camunda:property name="targetStatus" value="LOADED_ON_VEHICLE_1" />
+        </camunda:properties>
+      </extensionElements>
+      <incoming>flow_to_UpdateStatusLoaded1</incoming>
+      <outgoing>flow_to_UserTaskConfirmLoaded1</outgoing>
+    </serviceTask>
+    <sequenceFlow id="flow_to_UserTaskConfirmLoaded1" sourceRef="task_UpdateStatusLoaded1" targetRef="userTask_ConfirmLoaded1" />
+    <userTask id="userTask_ConfirmLoaded1" name="Tamamla: İlk Yükleme" camunda:candidateGroups="kargo-calisanlari">
+      <extensionElements>
+        <camunda:properties>
+          <camunda:property name="nextStepVariable" value="canProceedToTransfer" />
+        </camunda:properties>
+      </extensionElements>
+      <incoming>flow_to_UserTaskConfirmLoaded1</incoming>
+      <outgoing>flow_to_GatewayCheckCancel2</outgoing>
+    </userTask>
+    <sequenceFlow id="flow_to_GatewayCheckCancel2" sourceRef="userTask_ConfirmLoaded1" targetRef="gateway_CheckCancel2" />
+    <exclusiveGateway id="gateway_CheckCancel2" name="İptal/İlerleme Kontrolü 2">
+      <incoming>flow_to_GatewayCheckCancel2</incoming>
+      <outgoing>flow_to_UpdateStatusTransferCenter</outgoing>
+      <outgoing>flow_Cancel2</outgoing>
+    </exclusiveGateway>
+    <sequenceFlow id="flow_to_UpdateStatusTransferCenter" name="Devam" sourceRef="gateway_CheckCancel2" targetRef="task_UpdateStatusTransferCenter">
+      <conditionExpression xsi:type="tFormalExpression">${(isCancelled == null || isCancelled == false) &amp;&amp; canProceedToTransfer == true}</conditionExpression>
+    </sequenceFlow>
+    <sequenceFlow id="flow_Cancel2" name="İptal" sourceRef="gateway_CheckCancel2" targetRef="task_UpdateStatusCancelled">
+      <conditionExpression xsi:type="tFormalExpression">${isCancelled == true}</conditionExpression>
+    </sequenceFlow>
+    <serviceTask id="task_UpdateStatusTransferCenter" name="Durumu Güncelle: Transfer Merkezinde" camunda:delegateExpression="#{cargoStatusUpdater}">
+      <extensionElements>
+        <camunda:properties>
+          <camunda:property name="targetStatus" value="AT_TRANSFER_CENTER" />
+        </camunda:properties>
+      </extensionElements>
+      <incoming>flow_to_UpdateStatusTransferCenter</incoming>
+      <outgoing>flow_to_UserTaskConfirmTransfer</outgoing>
+    </serviceTask>
+    <sequenceFlow id="flow_to_UserTaskConfirmTransfer" sourceRef="task_UpdateStatusTransferCenter" targetRef="userTask_ConfirmTransfer" />
+    <userTask id="userTask_ConfirmTransfer" name="Tamamla: Transfer Varış" camunda:candidateGroups="kargo-calisanlari">
+      <extensionElements>
+        <camunda:properties>
+          <camunda:property name="nextStepVariable" value="canProceedToLoaded2" />
+        </camunda:properties>
+      </extensionElements>
+      <incoming>flow_to_UserTaskConfirmTransfer</incoming>
+      <outgoing>flow_to_GatewayCheckCancel3</outgoing>
+    </userTask>
+    <sequenceFlow id="flow_to_GatewayCheckCancel3" sourceRef="userTask_ConfirmTransfer" targetRef="gateway_CheckCancel3" />
+    <exclusiveGateway id="gateway_CheckCancel3" name="İptal/İlerleme Kontrolü 3">
+      <incoming>flow_to_GatewayCheckCancel3</incoming>
+      <outgoing>flow_to_UpdateStatusLoaded2</outgoing>
+      <outgoing>flow_Cancel3</outgoing>
+    </exclusiveGateway>
+    <sequenceFlow id="flow_to_UpdateStatusLoaded2" name="Devam" sourceRef="gateway_CheckCancel3" targetRef="task_UpdateStatusLoaded2">
+      <conditionExpression xsi:type="tFormalExpression">${(isCancelled == null || isCancelled == false) &amp;&amp; canProceedToLoaded2 == true}</conditionExpression>
+    </sequenceFlow>
+    <sequenceFlow id="flow_Cancel3" name="İptal" sourceRef="gateway_CheckCancel3" targetRef="task_UpdateStatusCancelled">
+      <conditionExpression xsi:type="tFormalExpression">${isCancelled == true}</conditionExpression>
+    </sequenceFlow>
+    <serviceTask id="task_UpdateStatusLoaded2" name="Durumu Güncelle: Son Araca Yüklendi" camunda:delegateExpression="#{cargoStatusUpdater}">
+      <extensionElements>
+        <camunda:properties>
+          <camunda:property name="targetStatus" value="LOADED_ON_VEHICLE_2" />
+        </camunda:properties>
+      </extensionElements>
+      <incoming>flow_to_UpdateStatusLoaded2</incoming>
+      <outgoing>flow_to_UserTaskConfirmLoaded2</outgoing>
+    </serviceTask>
+    <sequenceFlow id="flow_to_UserTaskConfirmLoaded2" sourceRef="task_UpdateStatusLoaded2" targetRef="userTask_ConfirmLoaded2" />
+    <userTask id="userTask_ConfirmLoaded2" name="Tamamla: Son Yükleme" camunda:candidateGroups="kargo-calisanlari">
+      <extensionElements>
+        <camunda:properties>
+          <camunda:property name="nextStepVariable" value="canProceedToDistribution" />
+        </camunda:properties>
+      </extensionElements>
+      <incoming>flow_to_UserTaskConfirmLoaded2</incoming>
+      <outgoing>flow_to_GatewayCheckCancel4</outgoing>
+    </userTask>
+    <sequenceFlow id="flow_to_GatewayCheckCancel4" sourceRef="userTask_ConfirmLoaded2" targetRef="gateway_CheckCancel4" />
+    <exclusiveGateway id="gateway_CheckCancel4" name="İptal/İlerleme Kontrolü 4">
+      <incoming>flow_to_GatewayCheckCancel4</incoming>
+      <outgoing>flow_to_UpdateStatusDistributionArea</outgoing>
+      <outgoing>flow_Cancel4</outgoing>
+    </exclusiveGateway>
+    <sequenceFlow id="flow_to_UpdateStatusDistributionArea" name="Devam" sourceRef="gateway_CheckCancel4" targetRef="task_UpdateStatusDistributionArea">
+      <conditionExpression xsi:type="tFormalExpression">${(isCancelled == null || isCancelled == false) &amp;&amp; canProceedToDistribution == true}</conditionExpression>
+    </sequenceFlow>
+    <sequenceFlow id="flow_Cancel4" name="İptal" sourceRef="gateway_CheckCancel4" targetRef="task_UpdateStatusCancelled">
+      <conditionExpression xsi:type="tFormalExpression">${isCancelled == true}</conditionExpression>
+    </sequenceFlow>
+    <serviceTask id="task_UpdateStatusDistributionArea" name="Durumu Güncelle: Dağıtım Bölgesinde" camunda:delegateExpression="#{cargoStatusUpdater}">
+      <extensionElements>
+        <camunda:properties>
+          <camunda:property name="targetStatus" value="AT_DISTRIBUTION_HUB" />
+        </camunda:properties>
+      </extensionElements>
+      <incoming>flow_to_UpdateStatusDistributionArea</incoming>
+      <outgoing>flow_to_UserTaskConfirmDistribution</outgoing>
+    </serviceTask>
+    <sequenceFlow id="flow_to_UserTaskConfirmDistribution" sourceRef="task_UpdateStatusDistributionArea" targetRef="userTask_ConfirmDistribution" />
+    <userTask id="userTask_ConfirmDistribution" name="Tamamla: Dağıtım Varış" camunda:candidateGroups="kargo-calisanlari">
+      <extensionElements>
+        <camunda:properties>
+          <camunda:property name="nextStepVariable" value="canProceedToOutForDelivery" />
+        </camunda:properties>
+      </extensionElements>
+      <incoming>flow_to_UserTaskConfirmDistribution</incoming>
+      <outgoing>flow_to_GatewayCheckCancel5</outgoing>
+    </userTask>
+    <sequenceFlow id="flow_to_GatewayCheckCancel5" sourceRef="userTask_ConfirmDistribution" targetRef="gateway_CheckCancel5" />
+    <exclusiveGateway id="gateway_CheckCancel5" name="İptal/İlerleme Kontrolü 5">
+      <incoming>flow_to_GatewayCheckCancel5</incoming>
+      <outgoing>flow_to_UpdateStatusOutForDelivery</outgoing>
+      <outgoing>flow_Cancel5</outgoing>
+    </exclusiveGateway>
+    <sequenceFlow id="flow_to_UpdateStatusOutForDelivery" name="Devam" sourceRef="gateway_CheckCancel5" targetRef="task_UpdateStatusOutForDelivery">
+      <conditionExpression xsi:type="tFormalExpression">${(isCancelled == null || isCancelled == false) &amp;&amp; canProceedToOutForDelivery == true}</conditionExpression>
+    </sequenceFlow>
+    <sequenceFlow id="flow_Cancel5" name="İptal" sourceRef="gateway_CheckCancel5" targetRef="task_UpdateStatusCancelled">
+      <conditionExpression xsi:type="tFormalExpression">${isCancelled == true}</conditionExpression>
+    </sequenceFlow>
+    <serviceTask id="task_UpdateStatusOutForDelivery" name="Durumu Güncelle: Dağıtımda" camunda:delegateExpression="#{cargoStatusUpdater}">
+      <extensionElements>
+        <camunda:properties>
+          <camunda:property name="targetStatus" value="OUT_FOR_DELIVERY" />
+        </camunda:properties>
+      </extensionElements>
+      <incoming>flow_to_UpdateStatusOutForDelivery</incoming>
+      <outgoing>flow_to_UserTaskConfirmOutDelivery</outgoing>
+    </serviceTask>
+    <sequenceFlow id="flow_to_UserTaskConfirmOutDelivery" sourceRef="task_UpdateStatusOutForDelivery" targetRef="userTask_ConfirmOutDelivery" />
+    <userTask id="userTask_ConfirmOutDelivery" name="Tamamla: Dağıtıma Çıkış" camunda:candidateGroups="kargo-calisanlari">
+      <extensionElements>
+        <camunda:properties>
+          <camunda:property name="nextStepVariable" value="canProceedToDelivered" />
+        </camunda:properties>
+      </extensionElements>
+      <incoming>flow_to_UserTaskConfirmOutDelivery</incoming>
+      <outgoing>flow_to_GatewayCheckCancel6</outgoing>
+    </userTask>
+    <sequenceFlow id="flow_to_GatewayCheckCancel6" sourceRef="userTask_ConfirmOutDelivery" targetRef="gateway_CheckCancel6" />
+    <exclusiveGateway id="gateway_CheckCancel6" name="İptal/İlerleme Kontrolü 6">
+      <incoming>flow_to_GatewayCheckCancel6</incoming>
+      <outgoing>flow_to_UpdateStatusDelivered</outgoing>
+      <outgoing>flow_Cancel6</outgoing>
+    </exclusiveGateway>
+    <sequenceFlow id="flow_to_UpdateStatusDelivered" name="Devam" sourceRef="gateway_CheckCancel6" targetRef="task_UpdateStatusDelivered">
+      <conditionExpression xsi:type="tFormalExpression">${(isCancelled == null || isCancelled == false) &amp;&amp; canProceedToDelivered == true}</conditionExpression>
+    </sequenceFlow>
+    <sequenceFlow id="flow_Cancel6" name="İptal" sourceRef="gateway_CheckCancel6" targetRef="task_UpdateStatusCancelled">
+      <conditionExpression xsi:type="tFormalExpression">${isCancelled == true}</conditionExpression>
+    </sequenceFlow>
+    <serviceTask id="task_UpdateStatusDelivered" name="Durumu Güncelle: Teslim Edildi" camunda:delegateExpression="#{cargoStatusUpdater}">
+      <extensionElements>
+        <camunda:properties>
+          <camunda:property name="targetStatus" value="DELIVERED" />
+        </camunda:properties>
+      </extensionElements>
+      <incoming>flow_to_UpdateStatusDelivered</incoming>
+      <outgoing>flow_DirectlyToEndDelivered</outgoing>
+    </serviceTask>
+    <sequenceFlow id="flow_DirectlyToEndDelivered" sourceRef="task_UpdateStatusDelivered" targetRef="endEvent_Delivered" />
+    <endEvent id="endEvent_Delivered" name="Teslim Edildi">
+      <incoming>flow_DirectlyToEndDelivered</incoming>
+    </endEvent>
+    <serviceTask id="task_UpdateStatusCancelled" name="Durumu Güncelle: İptal Edildi" camunda:delegateExpression="#{cargoStatusUpdater}">
+      <extensionElements>
+        <camunda:properties>
+          <camunda:property name="targetStatus" value="CANCELLED" />
+        </camunda:properties>
+      </extensionElements>
+      <incoming>flow_Cancel1</incoming>
+      <incoming>flow_Cancel2</incoming>
+      <incoming>flow_Cancel3</incoming>
+      <incoming>flow_Cancel4</incoming>
+      <incoming>flow_Cancel5</incoming>
+      <incoming>flow_Cancel6</incoming>
+      <outgoing>flow_to_EndCancelled</outgoing>
+    </serviceTask>
+    <sequenceFlow id="flow_to_EndCancelled" sourceRef="task_UpdateStatusCancelled" targetRef="endEvent_Cancelled" />
+    <endEvent id="endEvent_Cancelled" name="İptal Edildi">
+      <incoming>flow_to_EndCancelled</incoming>
+    </endEvent>
+  </process>
+  <bpmndi:BPMNDiagram id="BPMNDiagram_CargoV3_FullyCorrected_Plane">
+    <bpmndi:BPMNPlane id="BPMNPlane_CargoV3_FullyCorrected_PlaneElement" bpmnElement="cargoTrackingProcessV3">
+      <bpmndi:BPMNShape id="StartEvent_1_di_v3_corrected" bpmnElement="startEvent_CargoProcessStarted">
+        <dc:Bounds x="170" y="252" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="156" y="295" width="82" height="27" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Gateway_0k1a0m0_di_v3_corrected" bpmnElement="gateway_InitialParallelSplit">
+        <dc:Bounds x="255" y="245" width="50" height="50" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="228" y="218" width="89" height="27" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Activity_0m0z4r1_di_v3_corrected" bpmnElement="userTask_PhysicalReception">
+        <dc:Bounds x="350" y="120" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Activity_1g5p5o6_di_v3_corrected" bpmnElement="userTask_InvoiceCreation">
+        <dc:Bounds x="350" y="340" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Gateway_1wg800c_di_v3_corrected" bpmnElement="gateway_InitialParallelJoin">
+        <dc:Bounds x="470" y="245" width="50" height="50" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="443" y="302" width="82" height="27" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Activity_1wxh9js_di" bpmnElement="task_UpdateStatusReceived">
+        <dc:Bounds x="580" y="230" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Activity_0y4h2f8_di" bpmnElement="userTask_ConfirmReceived">
+        <dc:Bounds x="740" y="230" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Gateway_0k9496q_di_v3" bpmnElement="gateway_CheckCancel1" isMarkerVisible="true">
+        <dc:Bounds x="900" y="245" width="50" height="50" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="893" y="207.5" width="64" height="27" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Activity_1g7o3qj_di_v3" bpmnElement="task_UpdateStatusLoaded1">
+        <dc:Bounds x="1010" y="230" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Activity_1d0w3s4_di_v3" bpmnElement="userTask_ConfirmLoaded1">
+        <dc:Bounds x="1170" y="230" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Gateway_0f158x9_di_v3" bpmnElement="gateway_CheckCancel2" isMarkerVisible="true">
+        <dc:Bounds x="1300" y="245" width="50" height="50" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1293" y="207.5" width="64" height="27" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Activity_1v2n9u7_di_v3" bpmnElement="task_UpdateStatusTransferCenter">
+        <dc:Bounds x="1410" y="230" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Activity_0z9x1b5_di_v3" bpmnElement="userTask_ConfirmTransfer">
+        <dc:Bounds x="1570" y="230" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Gateway_0t0x25p_di_v3" bpmnElement="gateway_CheckCancel3" isMarkerVisible="true">
+        <dc:Bounds x="1700" y="245" width="50" height="50" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1693" y="207.5" width="64" height="27" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Activity_0j68z7m_di_v3" bpmnElement="task_UpdateStatusLoaded2">
+        <dc:Bounds x="1810" y="230" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Activity_1f6h9j2_di_v3" bpmnElement="userTask_ConfirmLoaded2">
+        <dc:Bounds x="1970" y="230" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Gateway_0cqv46f_di_v3" bpmnElement="gateway_CheckCancel4" isMarkerVisible="true">
+        <dc:Bounds x="2100" y="245" width="50" height="50" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="2093" y="207.5" width="64" height="27" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Activity_05w10b7_di_v3" bpmnElement="task_UpdateStatusDistributionArea">
+        <dc:Bounds x="2210" y="230" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Activity_1k3m5n7_di_v3" bpmnElement="userTask_ConfirmDistribution">
+        <dc:Bounds x="2370" y="230" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Gateway_1s46x2h_di_v3" bpmnElement="gateway_CheckCancel5" isMarkerVisible="true">
+        <dc:Bounds x="2500" y="245" width="50" height="50" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="2493" y="207.5" width="64" height="27" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Activity_0r46v0h_di_v3" bpmnElement="task_UpdateStatusOutForDelivery">
+        <dc:Bounds x="2610" y="230" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Activity_0p2q8r0_di_v3" bpmnElement="userTask_ConfirmOutDelivery">
+        <dc:Bounds x="2770" y="230" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Gateway_1v4n7h7_di_v3" bpmnElement="gateway_CheckCancel6" isMarkerVisible="true">
+        <dc:Bounds x="2900" y="245" width="50" height="50" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="2893" y="207.5" width="64" height="27" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Activity_0q8122i_di_v3" bpmnElement="task_UpdateStatusDelivered">
+        <dc:Bounds x="3010" y="230" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Activity_1i4091x_di_v3" bpmnElement="task_UpdateStatusCancelled">
+        <dc:Bounds x="3010" y="410" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Event_1c9n7r6_di_v3" bpmnElement="endEvent_Delivered">
+        <dc:Bounds x="3222" y="252" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="3210" y="295" width="62" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Event_0c0b0j3_di_v3" bpmnElement="endEvent_Cancelled">
+        <dc:Bounds x="3222" y="432" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="3213" y="475" width="51" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge id="Flow_1o99v0j_di_v3_corrected" bpmnElement="flow_to_InitialParallelSplit">
+        <di:waypoint x="206" y="270" />
+        <di:waypoint x="255" y="270" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_0f3u8t8_di_v3_corrected" bpmnElement="flow_to_PhysicalReceptionTask">
+        <di:waypoint x="280" y="245" />
+        <di:waypoint x="280" y="160" />
+        <di:waypoint x="350" y="160" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_1j2r9x4_di_v3_corrected" bpmnElement="flow_from_PhysicalReception_to_Join">
+        <di:waypoint x="450" y="160" />
+        <di:waypoint x="495" y="160" />
+        <di:waypoint x="495" y="245" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_1q0a59b_di_v3_corrected" bpmnElement="flow_to_InvoiceCreationTask">
+        <di:waypoint x="280" y="295" />
+        <di:waypoint x="280" y="380" />
+        <di:waypoint x="350" y="380" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_0y2b9w9_di_v3_corrected" bpmnElement="flow_from_InvoiceCreation_to_Join">
+        <di:waypoint x="450" y="380" />
+        <di:waypoint x="495" y="380" />
+        <di:waypoint x="495" y="295" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_0u8w6u2_di_v3_corrected" bpmnElement="flow_join_to_updateStatus">
+        <di:waypoint x="520" y="270" />
+        <di:waypoint x="580" y="270" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_0o7p3q1_di" bpmnElement="flow_update_to_confirm">
+        <di:waypoint x="680" y="270" />
+        <di:waypoint x="740" y="270" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_1o71w41_di_v3_connect" bpmnElement="flow_to_GatewayCheckCancel1">
+        <di:waypoint x="840" y="270" />
+        <di:waypoint x="900" y="270" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_187127e_di_v3_connect" bpmnElement="flow_to_UpdateStatusLoaded1">
+        <di:waypoint x="950" y="270" />
+        <di:waypoint x="1010" y="270" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="959" y="252" width="36" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_0p041w8_di_v3_connect" bpmnElement="flow_Cancel1">
+        <di:waypoint x="925" y="295" />
+        <di:waypoint x="925" y="450" />
+        <di:waypoint x="3010" y="450" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="930" y="363" width="21" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_1a2b3c4_di_v3_connect" bpmnElement="flow_to_UserTaskConfirmLoaded1">
+        <di:waypoint x="1110" y="270" />
+        <di:waypoint x="1170" y="270" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_1585a58_di_v3_connect" bpmnElement="flow_to_GatewayCheckCancel2">
+        <di:waypoint x="1270" y="270" />
+        <di:waypoint x="1300" y="270" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_14955d4_di_v3_connect" bpmnElement="flow_to_UpdateStatusTransferCenter">
+        <di:waypoint x="1350" y="270" />
+        <di:waypoint x="1410" y="270" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1359" y="252" width="36" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_0d1z404_di_v3_connect" bpmnElement="flow_Cancel2">
+        <di:waypoint x="1325" y="295" />
+        <di:waypoint x="1325" y="450" />
+        <di:waypoint x="3010" y="450" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1330" y="363" width="21" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_0t5f6g7_di_v3_connect" bpmnElement="flow_to_UserTaskConfirmTransfer">
+        <di:waypoint x="1510" y="270" />
+        <di:waypoint x="1570" y="270" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_09f1xfr_di_v3_connect" bpmnElement="flow_to_GatewayCheckCancel3">
+        <di:waypoint x="1670" y="270" />
+        <di:waypoint x="1700" y="270" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_0p45r3j_di_v3_connect" bpmnElement="flow_to_UpdateStatusLoaded2">
+        <di:waypoint x="1750" y="270" />
+        <di:waypoint x="1810" y="270" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1759" y="252" width="36" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_1h5oqlk_di_v3_connect" bpmnElement="flow_Cancel3">
+        <di:waypoint x="1725" y="295" />
+        <di:waypoint x="1725" y="450" />
+        <di:waypoint x="3010" y="450" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1730" y="363" width="21" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_1w2x3y4_di_v3_connect" bpmnElement="flow_to_UserTaskConfirmLoaded2">
+        <di:waypoint x="1910" y="270" />
+        <di:waypoint x="1970" y="270" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_03rtrb8_di_v3_connect" bpmnElement="flow_to_GatewayCheckCancel4">
+        <di:waypoint x="2070" y="270" />
+        <di:waypoint x="2100" y="270" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_0b70u3q_di_v3_connect" bpmnElement="flow_to_UpdateStatusDistributionArea">
+        <di:waypoint x="2150" y="270" />
+        <di:waypoint x="2210" y="270" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="2159" y="252" width="36" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_1w5b75x_di_v3_connect" bpmnElement="flow_Cancel4">
+        <di:waypoint x="2125" y="295" />
+        <di:waypoint x="2125" y="450" />
+        <di:waypoint x="3010" y="450" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="2130" y="363" width="21" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_0u1v2w3_di_v3_connect" bpmnElement="flow_to_UserTaskConfirmDistribution">
+        <di:waypoint x="2310" y="270" />
+        <di:waypoint x="2370" y="270" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_1w7u1i8_di_v3_connect" bpmnElement="flow_to_GatewayCheckCancel5">
+        <di:waypoint x="2470" y="270" />
+        <di:waypoint x="2500" y="270" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_0g4h54p_di_v3_connect" bpmnElement="flow_to_UpdateStatusOutForDelivery">
+        <di:waypoint x="2550" y="270" />
+        <di:waypoint x="2610" y="270" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="2559" y="252" width="36" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_0c9y7b5_di_v3_connect" bpmnElement="flow_Cancel5">
+        <di:waypoint x="2525" y="295" />
+        <di:waypoint x="2525" y="450" />
+        <di:waypoint x="3010" y="450" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="2530" y="363" width="21" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_1q2w3e4_di_v3_connect" bpmnElement="flow_to_UserTaskConfirmOutDelivery">
+        <di:waypoint x="2710" y="270" />
+        <di:waypoint x="2770" y="270" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_0x6r6u3_di_v3_connect" bpmnElement="flow_to_GatewayCheckCancel6">
+        <di:waypoint x="2870" y="270" />
+        <di:waypoint x="2900" y="270" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_1e80t0k_di_v3_connect" bpmnElement="flow_to_UpdateStatusDelivered">
+        <di:waypoint x="2950" y="270" />
+        <di:waypoint x="3010" y="270" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="2959" y="252" width="36" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_1n752a4_di_v3_connect" bpmnElement="flow_Cancel6">
+        <di:waypoint x="2925" y="295" />
+        <di:waypoint x="2925" y="450" />
+        <di:waypoint x="3010" y="450" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="2930" y="363" width="21" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_0f3v04p_di_v3_connect" bpmnElement="flow_DirectlyToEndDelivered">
+        <di:waypoint x="3110" y="270" />
+        <di:waypoint x="3222" y="270" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_160r5j1_di_v3_connect" bpmnElement="flow_to_EndCancelled">
+        <di:waypoint x="3110" y="450" />
+        <di:waypoint x="3222" y="450" />
+      </bpmndi:BPMNEdge>
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
+</definitions>
