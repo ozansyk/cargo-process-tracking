@@ -430,7 +430,7 @@ public class CargoServiceImpl implements CargoService {
                 .receiverName(cargo.getReceiverName()).receiverCity(cargo.getReceiverCity())
                 .currentStatus(getStatusDisplayName(cargo.getCurrentStatus()))
                 .currentStatusBadgeClass(getStatusBadgeClass(cargo.getCurrentStatus()))
-                .lastUpdateTime(cargo.getLastUpdatedAt())
+                .lastUpdatedAt(cargo.getLastUpdatedAt())
                 .cancellable(isCancellable).completable(isCompletable)
                 .build();
     }

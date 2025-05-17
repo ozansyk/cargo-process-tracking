@@ -18,7 +18,7 @@ public class CargoSearchResultDto {
     private String receiverCity;
     private String currentStatus; // Kullanıcı dostu metin
     private String currentStatusBadgeClass; // Bootstrap class
-    private LocalDateTime lastUpdateTime; // Son işlem zamanı (veya oluşturma zamanı)
+    private LocalDateTime lastUpdatedAt; // Son işlem zamanı (veya oluşturma zamanı)
     private boolean cancellable; // İptal edilebilir mi?
     private boolean completable; // İlerletilebilir mi? (Aktif User Task var mı?)
 }

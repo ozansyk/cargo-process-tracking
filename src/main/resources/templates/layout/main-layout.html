@@ -1,0 +1,145 @@
+<!doctype html>
+<html lang="tr"
+      xmlns:th="http://www.thymeleaf.org"
+      xmlns:layout="http://www.ultraq.net.nz/thymeleaf/layout"
+      xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <!-- Dinamik Başlık -->
+    <title layout:title-pattern="$LAYOUT_TITLE - $CONTENT_TITLE">Kargo Takip Sistemi</title>
+
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css">
+
+    <!-- Ortak Stiller -->
+    <style>
+        :root { --navbar-height: 56px; --sidebar-width: 240px; }
+        body { padding-top: var(--navbar-height); overflow-x: hidden; background-color: #f8f9fa; display: flex; flex-direction: column; min-height: 100vh; }
+        .sidebar { position: fixed; top: var(--navbar-height); bottom: 0; left: 0; width: var(--sidebar-width); z-index: 1000; padding: 1rem 0; overflow-x: hidden; overflow-y: auto; background-color: #e9ecef; border-right: 1px solid #ced4da; }
+        @media (max-width: 767.98px) { .sidebar { width: 100%; height: auto; position: relative; top: auto; border-right: none; border-bottom: 1px solid #dee2e6; } .main-content-wrapper { margin-left: 0 !important; } }
+        .sidebar .nav-link { color: #495057; padding: .6rem 1.2rem; white-space: nowrap; border-left: 3px solid transparent; transition: background-color 0.1s ease-in-out, border-left-color 0.1s ease-in-out; }
+        .sidebar .nav-link .bi { margin-right: .75rem; font-size: 1.1rem; vertical-align: text-bottom; }
+        .sidebar .nav-link.active { color: #0d6efd; background-color: #fff; border-left-color: #0d6efd; font-weight: 500; }
+        .sidebar .nav-link:hover:not(.active) { background-color: #dee2e6; color: #212529; }
+        .sidebar-heading { padding: .75rem 1.2rem; font-size: .8rem; color: #6c757d; text-transform: uppercase; font-weight: 600; letter-spacing: .05em; }
+        .main-content-wrapper { margin-left: var(--sidebar-width); width: calc(100% - var(--sidebar-width)); display: flex; flex-direction: column; flex-grow: 1; }
+        @media (max-width: 767.98px) { .main-content-wrapper { width: 100%; margin-left: 0; } }
+        .main-content { padding: 1.5rem; overflow-x: auto; flex-grow: 1; }
+        .navbar { z-index: 1030; box-shadow: 0 0.125rem 0.25rem rgba(0,0,0,.075); }
+        .navbar-brand { font-weight: 600; }
+        .app-footer { text-align: center; padding: 1rem 0; background-color: #f8f9fa; border-top: 1px solid #dee2e6; margin-top: auto; font-size: 0.9rem; }
+        .app-footer p { margin-bottom: 0.25rem; }
+
+        /* panel.html'den gelen genel card ve table stilleri (ihtiyaç duyulursa diğer sayfalarda da kullanılabilir) */
+        .card { border: none; border-radius: .5rem; }
+        .card-title { font-size: 0.9rem; margin-bottom: 0.25rem; opacity: 0.9; } /* panel.html'deki card-title için */
+        /* panel-sorgula.html'deki card-title için */
+        .filter-card .card-title { font-size: 1.25rem; margin-bottom: 1rem !important; display: flex; align-items: center;}
+        .card-text { margin-bottom: 0; } /* panel.html'deki card-text için */
+        .table-sm th, .table-sm td { padding: 0.4rem; } /* panel.html için */
+        .badge { padding: 0.4em 0.6em; font-size: 0.9em; } /* panel.html için, panel-sorgula için biraz daha küçük */
+    </style>
+
+    <!-- Sayfaya Özel Stiller (Gerekirse) -->
+    <th:block layout:fragment="pageStyles"></th:block>
+</head>
+<body>
+
+<!-- Sabit Üst Navbar -->
+<nav class="navbar navbar-expand-md navbar-dark fixed-top bg-dark">
+    <div class="container-fluid">
+        <a class="navbar-brand" th:href="@{/panel}">Kargo Takip Sistemi</a>
+        <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#sidebarMenu" aria-controls="sidebarMenu" aria-expanded="false" aria-label="Toggle navigation">
+            <span class="navbar-toggler-icon"></span>
+        </button>
+        <div class="d-flex align-items-center">
+            <!-- Kullanıcı bilgisi controller'dan username ve userRoles olarak gelmeli -->
+            <span class="navbar-text text-white me-3 d-none d-md-inline"
+                  th:if="${username != null and userRoles != null}"
+                  th:text="|Hoşgeldin, ${username} [${userRoles}]|">
+            </span>
+            <form th:action="@{/logout}" method="post" class="d-inline">
+                <button class="btn btn-outline-light btn-sm" type="submit">Çıkış Yap</button>
+            </form>
+        </div>
+    </div>
+</nav>
+
+<div class="container-fluid">
+    <div class="row">
+        <!-- Kenar Çubuğu (Sidebar) -->
+        <!-- activeMenuItem değişkeni controller'dan gönderilecek (örn: "anaPanel", "yeniKargo", "kargoSorgula") -->
+        <nav id="sidebarMenu" class="col-md-3 col-lg-2 d-md-block sidebar collapse bg-light">
+            <div class="position-sticky">
+                <ul class="nav flex-column pt-2">
+                    <li class="nav-item">
+                        <a class="nav-link" th:href="@{/panel}" th:classappend="${activeMenuItem == 'anaPanel' ? 'active' : ''}">
+                            <i class="bi bi-house-door"></i> Ana Panel
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" th:href="@{/panel/yeni-kargo}" th:classappend="${activeMenuItem == 'yeniKargo' ? 'active' : ''}">
+                            <i class="bi bi-box-seam"></i> Yeni Kargo Kaydı
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" th:href="@{/panel/sorgula}" th:classappend="${activeMenuItem == 'kargoSorgula' ? 'active' : ''}">
+                            <i class="bi bi-search"></i> Kargo Sorgula
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="#" th:classappend="${activeMenuItem == 'raporlar' ? 'active' : ''}">
+                            <i class="bi bi-file-earmark-bar-graph"></i> Raporlar
+                        </a>
+                    </li>
+                    <li class="nav-item" sec:authorize="hasRole('ADMIN')">
+                        <a class="nav-link" th:href="@{/panel/kullanici-yonetimi}" th:classappend="${activeMenuItem == 'kullaniciYonetimi' ? 'active' : ''}">
+                            <i class="bi bi-people"></i> Kullanıcı Yönetimi
+                        </a>
+                    </li>
+                </ul>
+                <h6 class="sidebar-heading d-flex justify-content-between align-items-center px-3 mt-4 mb-1 text-muted text-uppercase">
+                    <span>Hesabım</span>
+                </h6>
+                <ul class="nav flex-column mb-2">
+                    <li class="nav-item">
+                        <a class="nav-link" href="#" th:classappend="${activeMenuItem == 'profilim' ? 'active' : ''}">
+                            <i class="bi bi-person-circle"></i> Profilim
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <form th:action="@{/logout}" method="post" class="d-inline">
+                            <button class="nav-link text-start w-100 btn btn-link" type="submit" style="border:none; padding: .6rem 1.2rem;">
+                                <i class="bi bi-box-arrow-right"></i> Çıkış Yap
+                            </button>
+                        </form>
+                    </li>
+                </ul>
+            </div>
+        </nav>
+
+        <!-- Ana İçerik Alanı Wrapper -->
+        <div class="main-content-wrapper">
+            <!-- Dinamik Ana İçerik Alanı -->
+            <main class="main-content" layout:fragment="content">
+                <!-- Buraya her sayfanın kendi içeriği gelecek -->
+                <p>Varsayılan içerik. Bu bölüm dekore eden sayfa tarafından değiştirilmeli.</p>
+            </main>
+
+            <!-- Ortak Footer -->
+            <footer class="app-footer">
+                <p>© 2025 Kargo Takip Sistemi</p>
+                <p>Ozan SOYAK</p>
+            </footer>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+
+<!-- Sayfaya Özel Scriptler (Gerekirse) -->
+<th:block layout:fragment="pageScripts"></th:block>
+
+</body>
+</html>
