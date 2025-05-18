@@ -18,8 +18,6 @@ Bu proje, Spring Boot, Camunda Platform 7, Thymeleaf ve PostgreSQL kullanılarak
 5.  [Proje Yapısı](#proje-yapısı)
 6.  [Camunda Süreç Modeli](#camunda-süreç-modeli)
 7.  [Geliştirme Notları](#geliştirme-notları)
-8.  [Katkıda Bulunma](#katkıda-bulunma)
-9.  [Lisans](#lisans)
 
 ## Teknolojiler
 
@@ -259,19 +257,3 @@ Proje, `cargoTrackingProcessV3.bpmn` adlı bir Camunda BPMN 2.0 süreç modelini
 *   **Hata Yönetimi:** API ve Servis katmanlarında standart Java exception'ları ve uygun HTTP durum kodları kullanılır. Camunda delegate'lerinde `BpmnError` fırlatılır.
 *   **Loglama:** SLF4J (Logback ile) kullanılır. `application.yaml` dosyasından log seviyeleri ayarlanabilir.
 *   **Veritabanı Şeması:** Spring Data JPA'nın `ddl-auto: update` (veya `validate`) özelliği ile yönetilir. Camunda da kendi tablolarını otomatik olarak oluşturur/günceller (`camunda.bpm.database.schema-update: true`).
-
-## Katkıda Bulunma
-
-Katkıda bulunmak isterseniz, lütfen aşağıdaki adımları izleyin:
-
-1.  Projeyi fork edin.
-2.  Yeni bir özellik veya hata düzeltmesi için kendi branch'inizi oluşturun (`git checkout -b ozellik/yeni-bir-ozellik` veya `git checkout -b hata/bir-hata-duzeltmesi`).
-3.  Değişikliklerinizi commit edin (`git commit -m 'Yeni özellik eklendi'`).
-4.  Branch'inizi fork'unuza push edin (`git push origin ozellik/yeni-bir-ozellik`).
-5.  Bir Pull Request (PR) oluşturun.
-
-## Lisans
-
-Bu proje [MIT Lisansı](LICENSE.md) altında lisanslanmıştır. (Eğer bir lisans dosyası ekleyecekseniz)
-Veya:
-Bu proje için henüz bir lisans belirlenmemiştir.
