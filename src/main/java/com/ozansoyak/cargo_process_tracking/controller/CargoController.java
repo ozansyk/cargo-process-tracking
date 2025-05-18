@@ -2,6 +2,7 @@ package com.ozansoyak.cargo_process_tracking.controller;
 
 import com.ozansoyak.cargo_process_tracking.dto.CreateCargoRequest;
 import com.ozansoyak.cargo_process_tracking.dto.CargoResponse;
+import com.ozansoyak.cargo_process_tracking.dto.TaskCompletionResponse;
 import com.ozansoyak.cargo_process_tracking.dto.TrackingInfoResponse;
 import com.ozansoyak.cargo_process_tracking.service.CargoService;
 import jakarta.persistence.EntityNotFoundException;
@@ -74,9 +75,9 @@ public class CargoController {
         }
 
         try {
-            cargoService.completeUserTaskAndPrepareNextStep(trackingNumber.trim(), taskDefinitionKey.trim(), taskVariables);
+            TaskCompletionResponse completionResponse = cargoService.completeUserTaskAndPrepareNextStep(trackingNumber.trim(), taskDefinitionKey.trim(), taskVariables);
             log.info("Takip numarası {} için '{}' görevi tamamlandı ve sonraki adım hazırlandı.", trackingNumber, taskDefinitionKey);
-            return ResponseEntity.ok().body(Map.of("message", "'" + taskDefinitionKey + "' adlı görev başarıyla tamamlandı."));
+            return ResponseEntity.ok(completionResponse);
         } catch (EntityNotFoundException e) {
             log.warn("Görev tamamlanamadı, kargo veya aktif görev ('{}') bulunamadı: {}", taskDefinitionKey, e.getMessage());
             return ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of("message", e.getMessage()));

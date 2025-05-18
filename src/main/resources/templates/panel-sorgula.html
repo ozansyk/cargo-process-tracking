@@ -404,8 +404,8 @@
                 window.disableOtherTaskButtons(taskKey, true);
                 fetch(`/api/cargos/${currentTrackingNumber}/complete-step/${taskKey}`, { method: 'PUT' })
                     .then(window.handleFetchResponse)
-                    .then(response => {
-                        let message = (typeof response === 'object' && response.message) ? response.message : (typeof response === 'string' ? response : 'Görev başarıyla tamamlandı!');
+                    .then(responseData => { // responseData artık TaskCompletionResponse
+                        let message = (responseData && responseData.message) ? responseData.message : 'Görev başarıyla tamamlandı!';
                         if(updateResultArea) updateResultArea.innerHTML = `<div class="alert alert-success py-2 px-3">${message}</div>`;
                         window.fetchDetailsAndUpdateModal(currentTrackingNumber);
                     })
@@ -438,8 +438,9 @@
             const taskVariables = { invoiceNumber: invoiceNumber, invoiceAmount: invoiceAmount };
             fetch(`/api/cargos/${currentTrackingNumber}/complete-step/${taskKey}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(taskVariables) })
                 .then(window.handleFetchResponse)
-                .then(response => {
-                    let message = (typeof response === 'object' && response.message) ? response.message : (typeof response === 'string' ? response : 'Fatura oluşturuldu ve görev tamamlandı!');
+                .then(responseData => { // responseData artık TaskCompletionResponse
+                    // Dönen nesnedeki message alanını kullan
+                    let message = (responseData && responseData.message) ? responseData.message : 'Fatura oluşturuldu ve görev tamamlandı!';
                     if(updateResultArea) updateResultArea.innerHTML = `<div class="alert alert-success py-2 px-3">${message}</div>`;
                     window.hideInvoiceForm(); window.fetchDetailsAndUpdateModal(currentTrackingNumber);
                 })

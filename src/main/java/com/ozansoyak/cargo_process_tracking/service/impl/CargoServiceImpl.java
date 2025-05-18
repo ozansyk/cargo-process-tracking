@@ -200,7 +200,7 @@ public class CargoServiceImpl implements CargoService {
 
     @Override
     @Transactional
-    public void completeUserTaskAndPrepareNextStep(String trackingNumber, String taskDefinitionKeyToComplete, Map<String, Object> taskVariables) {
+    public TaskCompletionResponse completeUserTaskAndPrepareNextStep(String trackingNumber, String taskDefinitionKeyToComplete, Map<String, Object> taskVariables) {
         long methodStartTime = System.currentTimeMillis();
         log.info("{} takip numaralı kargo için '{}' görevini tamamlama isteği. Ek değişkenler: {}", trackingNumber, taskDefinitionKeyToComplete, taskVariables != null ? taskVariables.keySet() : "Yok");
 
@@ -244,6 +244,7 @@ public class CargoServiceImpl implements CargoService {
 
         String taskId = activeTaskToComplete.getId();
         String actualTaskDefinitionKey = activeTaskToComplete.getTaskDefinitionKey();
+        String taskName = StringUtils.hasText(activeTaskToComplete.getName()) ? activeTaskToComplete.getName() : actualTaskDefinitionKey; // Görev adını alalım
         String processDefinitionId = activeTaskToComplete.getProcessDefinitionId();
         log.info("Tamamlanacak aktif görev bulundu: Task ID: {}, Task Key: {}, Process Definition ID: {}", taskId, actualTaskDefinitionKey, processDefinitionId);
 
@@ -278,6 +279,12 @@ public class CargoServiceImpl implements CargoService {
             throw new IllegalStateException("Görev (Task ID: " + taskId +") tamamlanamadı: " + e.getMessage(), e);
         }
         log.info("completeUserTaskAndPrepareNextStep metodu tamamlandı. Toplam Süre: {}ms", (System.currentTimeMillis() - methodStartTime));
+
+        return new TaskCompletionResponse(
+                "'" + taskName + "' adlı görev başarıyla tamamlandı.",
+                taskName,
+                actualTaskDefinitionKey
+        );
     }
 
     private String getNextStepVariableFromBpmn(String processDefinitionId, String taskDefinitionKey) {
