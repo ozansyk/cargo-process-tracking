@@ -6,25 +6,34 @@
       layout:decorate="~{layout/main-layout}">
 <head>
     <title layout:fragment="title">Kargo Sorgula/Güncelle</title>
-    <!-- Bu sayfaya özel stiller (main-layout.html'dekilerle birleşecek) -->
     <th:block layout:fragment="pageStyles">
         <style>
-            .table-sm th, .table-sm td { vertical-align: middle; } /* panel-sorgula'ya özeldi, layout'a taşınabilir ya da burada kalabilir */
-            .badge { font-size: 0.85em; } /* panel-sorgula'ya özel badge boyutu, layout'taki genel badge'i ezer */
+            /* Genel Stil İyileştirmeleri */
+            .table-sm th, .table-sm td { vertical-align: middle; padding: 0.5rem; }
+            .badge { font-size: 0.85em; padding: 0.4em 0.65em; }
             .filter-card { background-color: #ffffff; box-shadow: 0 0.125rem 0.25rem rgba(0,0,0,.075); }
-            .modal-dialog-scrollable .modal-body { max-height: 70vh; overflow-y: auto; }
+            .modal-dialog-scrollable .modal-body { max-height: 75vh; overflow-y: auto; }
             #modalLoadingIndicator { padding: 3rem 0; }
             .pagination .page-item.active .page-link { z-index: 1; }
+
             #modalContentArea p { margin-bottom: 0.5rem; }
-            #modalContentArea h5 { margin-top: 1rem; margin-bottom: 0.25rem; font-size: 1rem; color: #6c757d;}
+            #modalContentArea h5 { margin-top: 1rem; margin-bottom: 0.3rem; font-size: 1rem; color: #495057; font-weight: 500;}
             #modalContentArea h5:first-of-type { margin-top: 0; }
+            #modalContentArea .text-muted.small { font-size: 0.85em; }
+
             .btn .spinner-border-sm { display: none; }
-            .btn .icon-idle { display: inline-block; }
-            .btn.loading .spinner-border-sm { display: inline-block; }
+            .btn .icon-idle { display: inline-block; vertical-align: middle; }
+            .btn.loading .spinner-border-sm { display: inline-block; vertical-align: middle;}
             .btn.loading .icon-idle { display: none; }
-            .btn.loading .button-text { margin-left: 0.25rem; }
+            .btn.loading .button-text { margin-left: 0.3rem; vertical-align: middle;}
+
             td a { color: var(--bs-link-color); text-decoration: underline; cursor: pointer; }
             td a:hover { color: var(--bs-link-hover-color); }
+
+            #invoiceEntryForm { border: 1px solid #dee2e6; border-radius: 0.375rem; }
+            #invoiceEntryForm .form-label-sm { font-size: 0.875em; margin-bottom: 0.25rem; }
+
+            #activeTasksButtonsArea .btn { margin-bottom: 0.5rem !important; }
         </style>
     </th:block>
 </head>
@@ -34,10 +43,9 @@
 <div layout:fragment="content">
     <h2 class="mb-4 border-bottom pb-2">Kargo Sorgulama ve Güncelleme</h2>
 
-    <!-- Filtreleme Alanı -->
     <div class="card filter-card mb-4">
         <div class="card-body">
-            <h5 class="card-title"><i class="bi bi-funnel-fill me-2"></i>Arama Filtreleri</h5>
+            <h5 class="card-title mb-3"><i class="bi bi-funnel-fill me-2"></i>Arama Filtreleri</h5>
             <form class="row g-3 align-items-end" th:action="@{/panel/sorgula}" method="get" th:object="${searchCriteria}">
                 <div class="col-lg-3 col-md-6">
                     <label for="trackingNo" class="form-label">Takip Numarası</label>
@@ -57,14 +65,13 @@
                         </option>
                     </select>
                 </div>
-                <div class="col-lg-auto col-md-12 mt-3 mt-lg-0">
-                    <button type="submit" class="btn btn-primary btn-sm w-100"><i class="bi bi-search me-1"></i> Ara</button>
+                <div class="col-lg-auto col-md-12 mt-3 mt-lg-0 d-grid">
+                    <button type="submit" class="btn btn-primary btn-sm"><i class="bi bi-search me-1"></i> Ara</button>
                 </div>
             </form>
         </div>
     </div>
 
-    <!-- Arama Sonuçları -->
     <div class="d-flex justify-content-between align-items-center mb-2">
         <h4 class="mb-0">Arama Sonuçları</h4>
         <span class="text-muted" th:if="${kargoPage != null}" th:text="|Toplam ${kargoPage.totalElements} kayıt bulundu|"></span>
@@ -87,16 +94,17 @@
             <tbody>
             <tr th:each="kargo : ${kargoPage.content}">
                 <td>
-                    <a href="javascript:void(0);" th:attr="onclick='openDetailModal(\'' + ${kargo.trackingNumber} + '\')'" th:text="${kargo.trackingNumber}"></a>
+                    <a href="javascript:void(0);" th:attr="onclick='window.openDetailModal(\'' + ${kargo.trackingNumber} + '\')'" th:text="${kargo.trackingNumber}"></a>
                 </td>
                 <td th:text="${kargo.senderName}"></td>
-                <td><span th:text="${kargo.receiverName}"></span> (<span th:text="${kargo.receiverCity}"></span>)</td>
+                <td><span th:text="${kargo.receiverName}"></span> <span th:if="${kargo.receiverCity != null}" th:text="'(' + ${kargo.receiverCity} + ')'"></span></td>
                 <td><span class="badge fs-6" th:classappend="${kargo.currentStatusBadgeClass}" th:text="${kargo.currentStatus}"></span></td>
                 <td th:text="${kargo.lastUpdatedAt != null ? #temporals.format(kargo.lastUpdatedAt, 'dd.MM.yy HH:mm') : '-'}"></td>
                 <td class="text-center">
                     <button type="button" class="btn btn-sm btn-outline-primary px-2 py-1"
                             th:attr="data-tracking-number=${kargo.trackingNumber}"
-                            onclick="openDetailModal(this.getAttribute('data-tracking-number'))">
+                            onclick="window.openDetailModal(this.getAttribute('data-tracking-number'))"
+                            title="Detayları Görüntüle ve Güncelle">
                         <i class="bi bi-pencil-square"></i>
                     </button>
                 </td>
@@ -104,7 +112,6 @@
             </tbody>
         </table>
 
-        <!-- Sayfalama -->
         <th:block th:with="baseUrl='/panel/sorgula',
                             currentParams=(${#strings.isEmpty(searchCriteria.trackingNo) ? '' : '&trackingNo=' + #uris.escapePath(searchCriteria.trackingNo)}) +
                                           (${#strings.isEmpty(searchCriteria.customerInfo) ? '' : '&customerInfo=' + #uris.escapePath(searchCriteria.customerInfo)}) +
@@ -115,11 +122,13 @@
                         <a class="page-link" th:href="@{${baseUrl}(page=0, size=${kargoPage.size})} + ${currentParams}">İlk</a>
                     </li>
                     <li class="page-item" th:classappend="${kargoPage.first} ? 'disabled'">
-                        <a class="page-link" th:href="@{${baseUrl}(page=${kargoPage.number - 1}, size=${kargoPage.size})} + ${currentParams}">Önceki</a>
+                        <a class="page-link" th:href="@{${baseUrl}(page=${kargoPage.number - 1}, size=${kargoPage.size})} + ${currentParams}">« Önceki</a>
                     </li>
-                    <li class="page-item disabled"><span class="page-link" th:text="|Sayfa ${kargoPage.number + 1} / ${kargoPage.totalPages}|"></span></li>
+                    <li class="page-item disabled d-none d-sm-block">
+                        <span class="page-link" th:text="|Sayfa ${kargoPage.number + 1} / ${kargoPage.totalPages}|"></span>
+                    </li>
                     <li class="page-item" th:classappend="${kargoPage.last} ? 'disabled'">
-                        <a class="page-link" th:href="@{${baseUrl}(page=${kargoPage.number + 1}, size=${kargoPage.size})} + ${currentParams}">Sonraki</a>
+                        <a class="page-link" th:href="@{${baseUrl}(page=${kargoPage.number + 1}, size=${kargoPage.size})} + ${currentParams}">Sonraki »</a>
                     </li>
                     <li class="page-item" th:classappend="${kargoPage.last} ? 'disabled'">
                         <a class="page-link" th:href="@{${baseUrl}(page=${kargoPage.totalPages - 1}, size=${kargoPage.size})} + ${currentParams}">Son</a>
@@ -129,9 +138,8 @@
         </th:block>
     </div>
 
-    <!-- Detay ve Güncelleme Modalı -->
     <div class="modal fade" id="detailUpdateModal" tabindex="-1" aria-labelledby="detailUpdateModalLabel" aria-hidden="true">
-        <div class="modal-dialog modal-lg modal-dialog-scrollable">
+        <div class="modal-dialog modal-xl modal-dialog-scrollable">
             <div class="modal-content">
                 <div class="modal-header">
                     <h1 class="modal-title fs-5" id="detailUpdateModalLabel">Kargo Detayları - <span id="modalTrackingNumber" class="fw-bold"></span></h1>
@@ -152,7 +160,7 @@
                         <div class="tab-content pt-2" id="cargoTabContent">
                             <div class="tab-pane fade show active" id="general-tab-pane" role="tabpanel" aria-labelledby="general-tab-btn" tabindex="0">
                                 <div class="row">
-                                    <div class="col-md-6">
+                                    <div class="col-md-6 mb-3 mb-md-0">
                                         <h5>Gönderici Bilgileri</h5>
                                         <p id="modalSenderName" class="mb-1">-</p>
                                         <p id="modalSenderPhone" class="text-muted small mb-1">-</p>
@@ -165,32 +173,50 @@
                                         <p id="modalReceiverAddress" class="text-muted small">-</p>
                                     </div>
                                 </div>
-                                <hr>
+                                <hr class="my-3">
                                 <h5>Kargo Detayları</h5>
                                 <p id="modalCargoDetails" class="mb-1">-</p>
                                 <p id="modalContentDesc" class="text-muted small">-</p>
                             </div>
                             <div class="tab-pane fade" id="history-tab-pane" role="tabpanel" aria-labelledby="history-tab-btn" tabindex="0">
                                 <div class="table-responsive">
-                                    <table class="table table-sm table-striped">
+                                    <table class="table table-sm table-striped table-hover">
                                         <thead class="table-light"><tr><th>Tarih</th><th>Durum</th><th>Lokasyon</th></tr></thead>
                                         <tbody id="modalHistoryTableBody"></tbody>
                                     </table>
+                                    <p id="noHistoryMessage" class="text-center text-muted" style="display: none;">Kargo hareketi bulunmamaktadır.</p>
                                 </div>
                             </div>
                             <div class="tab-pane fade" id="update-tab-pane" role="tabpanel" aria-labelledby="update-tab-btn" tabindex="0">
                                 <h5>İşlemler</h5>
                                 <p><strong>Mevcut Durum:</strong> <span id="modalCurrentStatus" class="badge fs-6">-</span></p>
-                                <hr>
-                                <div class="d-grid gap-2 d-sm-flex justify-content-sm-center align-items-center">
-                                    <button id="completeStepButton" class="btn btn-success btn-lg flex-grow-1" onclick="completeStep()" disabled>
-                                        <span class="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true" style="display: none;"></span>
-                                        <i class="bi bi-check-circle-fill me-1 icon-idle"></i>
-                                        <span class="button-text">Aktif Adımı Tamamla</span>
-                                    </button>
-                                    <button id="cancelCargoButton" class="btn btn-danger btn-lg flex-grow-1" onclick="cancelCargo()" disabled>
-                                        <span class="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true" style="display: none;"></span>
-                                        <i class="bi bi-x-octagon-fill me-1 icon-idle"></i>
+                                <hr class="my-3">
+                                <div id="activeTasksButtonsArea" class="d-grid gap-2 mb-3"></div>
+                                <p class="text-muted text-center" id="noActiveTasksMessage" style="display: none;">Tamamlanacak aktif kullanıcı görevi bulunmuyor.</p>
+                                <div id="invoiceEntryForm" style="display: none;" class="card bg-light p-3 mb-3">
+                                    <h6 class="mb-3 text-center">Fatura Bilgilerini Girin</h6>
+                                    <input type="hidden" id="invoiceTaskKeyToComplete">
+                                    <div class="mb-2">
+                                        <label for="invoiceNumberInput" class="form-label form-label-sm">Fatura Numarası:</label>
+                                        <input type="text" class="form-control form-control-sm" id="invoiceNumberInput" placeholder="örn: INV202400123">
+                                    </div>
+                                    <div class="mb-3">
+                                        <label for="invoiceAmountInput" class="form-label form-label-sm">Fatura Tutarı (₺):</label>
+                                        <input type="number" step="0.01" class="form-control form-control-sm" id="invoiceAmountInput" placeholder="örn: 125.50">
+                                    </div>
+                                    <div class="d-flex justify-content-end">
+                                        <button type="button" class="btn btn-sm btn-outline-secondary me-2" onclick="window.hideInvoiceForm()">Vazgeç</button>
+                                        <button type="button" class="btn btn-sm btn-success" id="submitInvoiceButton" onclick="window.submitInvoiceAndCompleteTask()">
+                                            <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+                                            <i class="bi bi-save icon-idle"></i>
+                                            <span class="button-text">Faturayı Kaydet ve Görevi Tamamla</span>
+                                        </button>
+                                    </div>
+                                </div>
+                                <div class="d-grid">
+                                    <button id="cancelCargoButton" class="btn btn-danger btn-lg" onclick="window.cancelCargo()" disabled>
+                                        <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+                                        <i class="bi bi-x-octagon-fill icon-idle"></i>
                                         <span class="button-text">Kargoyu İptal Et</span>
                                     </button>
                                 </div>
@@ -207,9 +233,13 @@
     </div>
 </div>
 
-<!-- Sayfaya Özel Scriptler -->
 <th:block layout:fragment="pageScripts">
     <script th:inline="javascript">
+        // Global Değişkenler
+        let currentTrackingNumber = null;
+        const PHYSICAL_RECEPTION_TASK_KEY = /*[[${T(com.ozansoyak.cargo_process_tracking.service.impl.CargoServiceImpl).PHYSICAL_RECEPTION_TASK_KEY}]]*/ 'userTask_PhysicalReception_fallback';
+        const INVOICE_CREATION_TASK_KEY = /*[[${T(com.ozansoyak.cargo_process_tracking.service.impl.CargoServiceImpl).INVOICE_CREATION_TASK_KEY}]]*/ 'userTask_InvoiceCreation_fallback';
+
         // Modal ve İçerik Elementleri
         const detailModalElement = document.getElementById('detailUpdateModal');
         const detailModal = detailModalElement ? new bootstrap.Modal(detailModalElement) : null;
@@ -226,221 +256,289 @@
         const modalCargoDetails = document.getElementById('modalCargoDetails');
         const modalContentDesc = document.getElementById('modalContentDesc');
         const modalHistoryTableBody = document.getElementById('modalHistoryTableBody');
+        const noHistoryMessage = document.getElementById('noHistoryMessage');
         const modalCurrentStatusSpan = document.getElementById('modalCurrentStatus');
-        const completeStepButton = document.getElementById('completeStepButton');
+        const activeTasksButtonsArea = document.getElementById('activeTasksButtonsArea');
+        const noActiveTasksMessage = document.getElementById('noActiveTasksMessage');
+        const invoiceEntryForm = document.getElementById('invoiceEntryForm');
+        const invoiceTaskKeyToCompleteInput = document.getElementById('invoiceTaskKeyToComplete');
+        const invoiceNumberInput = document.getElementById('invoiceNumberInput');
+        const invoiceAmountInput = document.getElementById('invoiceAmountInput');
+        const submitInvoiceButton = document.getElementById('submitInvoiceButton');
         const cancelCargoButton = document.getElementById('cancelCargoButton');
         const updateResultArea = document.getElementById('updateResultArea');
 
-        let currentTrackingNumber = null;
-
-        function openDetailModal(trackingNumber) {
-            console.log("openDetailModal called with:", trackingNumber);
-            if (!detailModal || !trackingNumber) {
-                console.error("Modal veya takip no eksik!");
-                return;
-            }
-            currentTrackingNumber = trackingNumber;
-            if(modalTrackingNumberSpan) modalTrackingNumberSpan.textContent = trackingNumber;
-
-            if(modalError) {
-                modalError.style.display = 'none';
-                modalError.textContent = '';
-            }
+        window.openDetailModal = function(trackingNumber) {
+            if (!detailModal || !trackingNumber) { console.error("Modal veya takip no eksik!"); return; }
+            currentTrackingNumber = trackingNumber.trim();
+            if (modalTrackingNumberSpan) modalTrackingNumberSpan.textContent = currentTrackingNumber;
+            if(modalError) { modalError.style.display = 'none'; modalError.textContent = ''; }
             if(modalContent) modalContent.style.display = 'none';
             if(updateResultArea) updateResultArea.innerHTML = '';
-
-            if(completeStepButton) {
-                resetButtonState(completeStepButton, 'Aktif Adımı Tamamla');
-                completeStepButton.disabled = true;
-            }
-            if(cancelCargoButton) {
-                resetButtonState(cancelCargoButton, 'Kargoyu İptal Et');
-                cancelCargoButton.disabled = true;
-            }
+            if(activeTasksButtonsArea) activeTasksButtonsArea.innerHTML = '';
+            if(noActiveTasksMessage) noActiveTasksMessage.style.display = 'none';
+            if(invoiceEntryForm) invoiceEntryForm.style.display = 'none';
+            if(cancelCargoButton) { window.resetButtonState(cancelCargoButton, 'Kargoyu İptal Et'); cancelCargoButton.disabled = true; }
             if(modalLoading) modalLoading.style.display = 'block';
-
             const firstTabButton = document.querySelector('#cargoTab button[data-bs-target="#general-tab-pane"]');
-            if(firstTabButton) {
-                const tab = bootstrap.Tab.getInstance(firstTabButton) || new bootstrap.Tab(firstTabButton);
-                tab.show();
-            }
-
+            if (firstTabButton) { const tab = bootstrap.Tab.getInstance(firstTabButton) || new bootstrap.Tab(firstTabButton); tab.show(); }
             detailModal.show();
+            window.fetchDetailsAndUpdateModal(currentTrackingNumber);
+        };
+
+        window.fetchDetailsAndUpdateModal = function(trackingNumber) {
+            if (!trackingNumber) return;
+            if(cancelCargoButton) cancelCargoButton.disabled = true; // API çağrısı sırasında iptal butonunu da kilitleyelim
+            // Aktif görev butonları populateModal içinde zaten temizlenip yeniden oluşturuluyor.
+            // Bu yüzden burada ayrıca disable etmeye gerek yok, fetch bitince populateModal onları doğru duruma getirecek.
 
             fetch(`/api/cargos/details/${encodeURIComponent(trackingNumber)}`)
-                .then(handleFetchResponse)
+                .then(window.handleFetchResponse)
                 .then(data => {
-                    populateModal(data);
+                    window.populateModal(data);
                     if(modalLoading) modalLoading.style.display = 'none';
                     if(modalContent) modalContent.style.display = 'block';
                 })
                 .catch(error => {
-                    console.error("Modal veri çekme hatası:", error);
+                    console.error("Modal yenileme hatası:", error);
                     if(modalLoading) modalLoading.style.display = 'none';
+                    if(modalContent) modalContent.style.display = 'none';
+                    if(activeTasksButtonsArea) activeTasksButtonsArea.innerHTML = ''; // Hata durumunda butonları temizle
+                    if(noActiveTasksMessage) noActiveTasksMessage.style.display = 'block'; // Hata durumunda mesajı göster
                     if(modalError) {
-                        modalError.textContent = `Detaylar alınamadı: ${error.message}`;
+                        modalError.textContent = `Detaylar yenilenemedi: ${error.message || 'Bilinmeyen bir hata oluştu.'}`;
                         modalError.style.display = 'block';
                     }
+                    // Hata durumunda iptal butonunu da resetleyip kilitleyelim
+                    if(cancelCargoButton) { window.resetButtonState(cancelCargoButton, 'Kargoyu İptal Et'); cancelCargoButton.disabled = true;}
                 });
-        }
+        };
 
-        function populateModal(data) {
-            if (!data) return;
-            if(modalSenderName) modalSenderName.textContent = data.senderName || '-';
-            if(modalSenderPhone) modalSenderPhone.textContent = data.senderPhone || '-';
-            if(modalSenderAddress) modalSenderAddress.textContent = data.senderAddress || '-';
-            if(modalReceiverName) modalReceiverName.textContent = data.receiverName || '-';
-            if(modalReceiverPhone) modalReceiverPhone.textContent = data.receiverPhone || '-';
-            if(modalReceiverAddress) modalReceiverAddress.textContent = data.receiverAddress || '-';
+        window.populateModal = function(data) {
+            // console.log("populateModal çağrıldı. Gelen data:", JSON.parse(JSON.stringify(data)));
+            if (!data) {
+                if(modalError) { modalError.textContent = 'Kargo bilgileri alınamadı.'; modalError.style.display = 'block'; }
+                return;
+            }
 
+            window.setTextContent(modalSenderName, data.senderName);
+            window.setTextContent(modalSenderPhone, data.senderPhone);
+            window.setTextContent(modalSenderAddress, data.senderAddress);
+            window.setTextContent(modalReceiverName, data.receiverName);
+            window.setTextContent(modalReceiverPhone, data.receiverPhone);
+            window.setTextContent(modalReceiverAddress, data.receiverAddress);
             let cargoDetailsText = '';
-            if(data.weight) cargoDetailsText += `Ağırlık: ${data.weight} kg`;
-            if(data.dimensions) cargoDetailsText += (cargoDetailsText ? ', Boyutlar: ' : 'Boyutlar: ') + data.dimensions;
-            if(modalCargoDetails) modalCargoDetails.textContent = cargoDetailsText || '-';
+            if (data.weight) cargoDetailsText += `Ağırlık: ${data.weight} kg`;
+            if (data.dimensions) cargoDetailsText += (cargoDetailsText ? ', Boyutlar: ' : 'Boyutlar: ') + data.dimensions;
+            window.setTextContent(modalCargoDetails, cargoDetailsText || '-');
+            window.setTextContent(modalContentDesc, data.contentDescription ? `İçerik: ${data.contentDescription}` : 'İçerik: -');
 
-            if(modalContentDesc) modalContentDesc.textContent = `İçerik: ${data.contentDescription || '-'}`;
-
-            if(modalHistoryTableBody) {
+            if (modalHistoryTableBody) {
                 modalHistoryTableBody.innerHTML = '';
                 if (data.historyEvents && data.historyEvents.length > 0) {
+                    if(noHistoryMessage) noHistoryMessage.style.display = 'none';
                     data.historyEvents.forEach(event => {
                         const row = modalHistoryTableBody.insertRow();
                         row.insertCell().textContent = event.timestamp ? new Date(event.timestamp).toLocaleString('tr-TR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit'}) : '-';
                         row.insertCell().innerHTML = `<span class="badge ${event.statusBadgeClass || 'bg-secondary'}">${event.statusDescription || '-'}</span>`;
                         row.insertCell().textContent = event.location || '-';
                     });
+                } else { if(noHistoryMessage) noHistoryMessage.style.display = 'block'; }
+            }
+
+            if (modalCurrentStatusSpan) { modalCurrentStatusSpan.textContent = data.currentStatus || 'Bilinmiyor'; modalCurrentStatusSpan.className = `badge fs-6 ${data.currentStatusBadgeClass || 'bg-secondary'}`; }
+
+            if (activeTasksButtonsArea) activeTasksButtonsArea.innerHTML = '';
+            if (invoiceEntryForm) invoiceEntryForm.style.display = 'none';
+            if (noActiveTasksMessage) noActiveTasksMessage.style.display = 'none'; // Başlangıçta mesajı gizle
+
+            let hasAnyButtonBeenAdded = false;
+            if (data.activeUserTasks && data.activeUserTasks.length > 0) {
+                data.activeUserTasks.forEach(taskInfo => {
+                    if (taskInfo.completable) {
+                        hasAnyButtonBeenAdded = true;
+                        const button = document.createElement('button');
+                        let buttonClass = 'btn-success'; let buttonIcon = 'bi-check-circle-fill';
+                        if(taskInfo.taskDefinitionKey === PHYSICAL_RECEPTION_TASK_KEY) { buttonClass = 'btn-info'; buttonIcon = 'bi-box-arrow-in-down'; }
+                        else if (taskInfo.taskDefinitionKey === INVOICE_CREATION_TASK_KEY) { buttonClass = 'btn-warning'; buttonIcon = 'bi-receipt-cutoff'; }
+                        button.classList.add('btn', buttonClass, 'btn-lg', 'w-100');
+                        button.innerHTML = `<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span><i class="bi ${buttonIcon} icon-idle"></i><span class="button-text">${taskInfo.taskName || taskInfo.taskDefinitionKey}</span>`;
+                        button.dataset.taskKey = taskInfo.taskDefinitionKey;
+                        button.dataset.requiresInput = taskInfo.requiresInput;
+                        button.dataset.originalText = taskInfo.taskName || taskInfo.taskDefinitionKey;
+                        button.onclick = function() { window.handleCompleteTaskClick(this); };
+                        if(activeTasksButtonsArea) activeTasksButtonsArea.appendChild(button);
+                    }
+                });
+            }
+
+            if (!hasAnyButtonBeenAdded && noActiveTasksMessage) {
+                noActiveTasksMessage.style.display = 'block';
+            } else if (hasAnyButtonBeenAdded && noActiveTasksMessage) {
+                noActiveTasksMessage.style.display = 'none';
+            }
+
+            if (cancelCargoButton) { window.resetButtonState(cancelCargoButton, 'Kargoyu İptal Et'); cancelCargoButton.disabled = !(data.cancellable === true); }
+        };
+
+        window.setTextContent = function(element, text) {
+            if (element) { element.textContent = text || '-'; }
+        };
+
+        window.handleCompleteTaskClick = function(buttonElement) {
+            const taskKey = buttonElement.dataset.taskKey;
+            const requiresInput = buttonElement.dataset.requiresInput === 'true';
+            if (!currentTrackingNumber || !taskKey) return;
+            if(updateResultArea) updateResultArea.innerHTML = '';
+            if (requiresInput) {
+                if (invoiceEntryForm && invoiceTaskKeyToCompleteInput && invoiceNumberInput && invoiceAmountInput) {
+                    invoiceTaskKeyToCompleteInput.value = taskKey; invoiceNumberInput.value = ''; invoiceAmountInput.value = '';
+                    invoiceEntryForm.style.display = 'block';
+                    if(submitInvoiceButton) window.resetButtonState(submitInvoiceButton, 'Faturayı Kaydet ve Görevi Tamamla');
                 } else {
-                    modalHistoryTableBody.innerHTML = '<tr><td colspan="3" class="text-center text-muted i">Hareket bulunamadı.</td></tr>';
+                    console.error("Fatura giriş formu elementleri eksik!");
+                    if(updateResultArea) updateResultArea.innerHTML = `<div class="alert alert-danger py-2 px-3">Fatura formu görüntülenemedi.</div>`;
                 }
+            } else {
+                window.setButtonLoading(buttonElement, true, 'İşleniyor...');
+                window.disableOtherTaskButtons(taskKey, true);
+                fetch(`/api/cargos/${currentTrackingNumber}/complete-step/${taskKey}`, { method: 'PUT' })
+                    .then(window.handleFetchResponse)
+                    .then(response => {
+                        let message = (typeof response === 'object' && response.message) ? response.message : (typeof response === 'string' ? response : 'Görev başarıyla tamamlandı!');
+                        if(updateResultArea) updateResultArea.innerHTML = `<div class="alert alert-success py-2 px-3">${message}</div>`;
+                        window.fetchDetailsAndUpdateModal(currentTrackingNumber);
+                    })
+                    .catch(error => {
+                        console.error(`'${taskKey}' görevi tamamlama hatası:`, error);
+                        if(updateResultArea) updateResultArea.innerHTML = `<div class="alert alert-danger py-2 px-3">Hata: ${error.message || 'Bilinmeyen bir hata oluştu.'}</div>`;
+                        window.fetchDetailsAndUpdateModal(currentTrackingNumber);
+                    });
             }
+        };
 
-            if(modalCurrentStatusSpan) {
-                modalCurrentStatusSpan.textContent = data.currentStatus || 'Bilinmiyor';
-                modalCurrentStatusSpan.className = `badge fs-6 ${data.currentStatusBadgeClass || 'bg-secondary'}`;
-            }
-            if(completeStepButton) completeStepButton.disabled = !(data.completable === true);
-            if(cancelCargoButton) cancelCargoButton.disabled = !(data.cancellable === true);
-        }
+        window.hideInvoiceForm = function() {
+            if (invoiceEntryForm) invoiceEntryForm.style.display = 'none';
+            if (invoiceTaskKeyToCompleteInput) invoiceTaskKeyToCompleteInput.value = '';
+        };
 
-        function completeStep() {
-            if (!currentTrackingNumber || !completeStepButton || !cancelCargoButton || !updateResultArea) return;
-            setButtonLoading(completeStepButton, true, 'İşleniyor...');
-            setButtonLoading(cancelCargoButton, true); // Diğer butonu da kilitle
-            updateResultArea.innerHTML = '';
-
-            fetch(`/api/cargos/${currentTrackingNumber}/complete-step`, { method: 'PUT' })
-                .then(handleFetchResponse)
-                .then(data => {
-                    let message = (typeof data === 'object' && data.message) ? data.message : (typeof data === 'string' ? data : 'Adım başarıyla tamamlandı!');
-                    updateResultArea.innerHTML = `<div class="alert alert-success py-2 px-3">${message}</div>`;
-                    fetchDetailsAndUpdateModal(currentTrackingNumber); // Modal'ı yenile
+        window.submitInvoiceAndCompleteTask = function() {
+            const taskKey = invoiceTaskKeyToCompleteInput.value;
+            if (!currentTrackingNumber || !taskKey || !submitInvoiceButton) return;
+            const invoiceNumber = invoiceNumberInput.value.trim();
+            const invoiceAmountStr = invoiceAmountInput.value.trim();
+            if (!invoiceNumber) { alert("Fatura Numarası boş bırakılamaz."); return; }
+            if (!invoiceAmountStr) { alert("Fatura Tutarı boş bırakılamaz."); return; }
+            const invoiceAmount = parseFloat(invoiceAmountStr);
+            if (isNaN(invoiceAmount) || invoiceAmount <= 0) { alert("Fatura Tutarı geçerli pozitif bir sayı olmalıdır."); return; }
+            window.setButtonLoading(submitInvoiceButton, true, 'Kaydediliyor...');
+            const mainTaskButton = window.findButtonByTaskKey(taskKey);
+            if (mainTaskButton) mainTaskButton.disabled = true;
+            window.disableOtherTaskButtons(taskKey, true);
+            const taskVariables = { invoiceNumber: invoiceNumber, invoiceAmount: invoiceAmount };
+            fetch(`/api/cargos/${currentTrackingNumber}/complete-step/${taskKey}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(taskVariables) })
+                .then(window.handleFetchResponse)
+                .then(response => {
+                    let message = (typeof response === 'object' && response.message) ? response.message : (typeof response === 'string' ? response : 'Fatura oluşturuldu ve görev tamamlandı!');
+                    if(updateResultArea) updateResultArea.innerHTML = `<div class="alert alert-success py-2 px-3">${message}</div>`;
+                    window.hideInvoiceForm(); window.fetchDetailsAndUpdateModal(currentTrackingNumber);
                 })
                 .catch(error => {
-                    console.error("Adım tamamlama hatası:", error);
-                    updateResultArea.innerHTML = `<div class="alert alert-danger py-2 px-3">Hata: ${error.message}</div>`;
-                    fetchDetailsAndUpdateModal(currentTrackingNumber); // Hata olsa bile modal'ı güncel durumla yenile
+                    console.error("Fatura gönderme ve görev tamamlama hatası:", error);
+                    if(updateResultArea) updateResultArea.innerHTML = `<div class="alert alert-danger py-2 px-3">Hata: ${error.message || 'Bilinmeyen bir hata oluştu.'}</div>`;
+                    window.fetchDetailsAndUpdateModal(currentTrackingNumber);
                 });
-        }
+        };
 
-        function cancelCargo() {
-            if (!currentTrackingNumber || !cancelCargoButton || !completeStepButton || !updateResultArea) return;
+        window.cancelCargo = function() {
+            if (!currentTrackingNumber || !cancelCargoButton) return;
             if (!confirm(`'${currentTrackingNumber}' takip numaralı kargoyu iptal etmek istediğinizden emin misiniz?\nBu işlem geri alınamaz!`)) return;
-
-            setButtonLoading(cancelCargoButton, true, 'İptal Ediliyor...');
-            setButtonLoading(completeStepButton, true); // Diğer butonu da kilitle
-            updateResultArea.innerHTML = '';
-
+            window.setButtonLoading(cancelCargoButton, true, 'İptal Ediliyor...');
+            window.disableOtherTaskButtons(null, true);
             fetch(`/api/cargos/${currentTrackingNumber}/cancel`, { method: 'PUT' })
-                .then(handleFetchResponse)
-                .then(data => {
-                    let message = (typeof data === 'object' && data.message) ? data.message : (typeof data === 'string' ? data : 'Kargo iptal edildi/iptal işlemi başlatıldı.');
-                    updateResultArea.innerHTML = `<div class="alert alert-warning py-2 px-3">${message}</div>`;
-                    fetchDetailsAndUpdateModal(currentTrackingNumber); // Modal'ı yenile
+                .then(window.handleFetchResponse)
+                .then(response => {
+                    let message = (typeof response === 'object' && response.message) ? response.message : (typeof response === 'string' ? response : 'Kargo iptal edildi/iptal işlemi başlatıldı.');
+                    if(updateResultArea) updateResultArea.innerHTML = `<div class="alert alert-warning py-2 px-3">${message}</div>`;
+                    window.fetchDetailsAndUpdateModal(currentTrackingNumber);
                 })
                 .catch(error => {
                     console.error("Kargo iptal hatası:", error);
-                    updateResultArea.innerHTML = `<div class="alert alert-danger py-2 px-3">Hata: ${error.message}</div>`;
-                    fetchDetailsAndUpdateModal(currentTrackingNumber); // Hata olsa bile modal'ı güncel durumla yenile
+                    if(updateResultArea) updateResultArea.innerHTML = `<div class="alert alert-danger py-2 px-3">Hata: ${error.message || 'Bilinmeyen bir hata oluştu.'}</div>`;
+                    window.fetchDetailsAndUpdateModal(currentTrackingNumber);
                 });
-        }
+        };
 
-        function fetchDetailsAndUpdateModal(trackingNumber) {
-            fetch(`/api/cargos/details/${encodeURIComponent(trackingNumber)}`)
-                .then(handleFetchResponse)
-                .then(data => {
-                    populateModal(data);
-                    if (completeStepButton) resetButtonState(completeStepButton, 'Aktif Adımı Tamamla');
-                    if (cancelCargoButton) resetButtonState(cancelCargoButton, 'Kargoyu İptal Et');
-                    // Butonların disabled durumları populateModal içinde güncelleniyor.
-                })
-                .catch(error => {
-                    console.error("Modal yenileme hatası:", error);
-                    if(modalLoading) modalLoading.style.display = 'none';
-                    if(modalContent) modalContent.style.display = 'none';
-                    if(modalError) {
-                        modalError.textContent = `Detaylar yenilenemedi: ${error.message}`;
-                        modalError.style.display = 'block';
-                    }
-                    if(completeStepButton) completeStepButton.disabled = true;
-                    if(cancelCargoButton) cancelCargoButton.disabled = true;
-                });
-        }
-
-        function handleFetchResponse(response) {
+        window.handleFetchResponse = function(response) {
             if (!response.ok) {
-                return response.text().then(text => {
-                    let errorMessage = `İstek başarısız: ${response.status}`;
-                    if (text) {
-                        try {
-                            const errData = JSON.parse(text);
-                            errorMessage = errData.message || errData.error || text;
-                        } catch (e) { errorMessage = text; }
-                    }
-                    if (response.status === 404 && !errorMessage.toLowerCase().includes("bulunamadı")) {
-                        errorMessage = "Belirtilen kargo bulunamadı.";
-                    }
-                    if (response.status === 409 && !errorMessage.toLowerCase().includes("durum")) {
-                        errorMessage = "İşlem için geçersiz durum veya çakışma.";
-                    }
-                    throw new Error(errorMessage);
-                });
+                return response.json().catch(() => response.text())
+                    .then(errDataOrText => {
+                        let errorMessage = `İstek başarısız: ${response.status}`;
+                        if (typeof errDataOrText === 'object' && errDataOrText.message) errorMessage = errDataOrText.message;
+                        else if (typeof errDataOrText === 'string' && errDataOrText.trim() !== '') errorMessage = errDataOrText;
+                        if (response.status === 404 && !errorMessage.toLowerCase().includes("bulunamadı")) errorMessage = "Belirtilen kaynak bulunamadı.";
+                        else if (response.status === 409 && !errorMessage.toLowerCase().includes("durum") && !errorMessage.toLowerCase().includes("çakışma")) errorMessage = "İşlem için geçersiz durum veya çakışma.";
+                        else if (response.status === 500 && !errorMessage.toLowerCase().includes("sunucu")) errorMessage = "Sunucuda bir hata oluştu.";
+                        throw new Error(errorMessage);
+                    });
             }
             const contentType = response.headers.get("content-type");
-            if (contentType && contentType.indexOf("application/json") !== -1) {
-                return response.json().catch(e => {
-                    console.error("JSON Parse Error:", e);
-                    throw new Error("Sunucudan gelen JSON yanıt işlenemedi.");
-                });
-            } else {
-                return response.text(); // String yanıtlar için
-            }
-        }
+            if (contentType && contentType.includes("application/json")) return response.json().catch(e => { console.error("JSON Parse Error:", e, response); throw new Error("Sunucudan gelen JSON yanıt işlenemedi."); });
+            return response.text();
+        };
 
-        function setButtonLoading(button, isLoading, loadingText = 'İşleniyor...') {
+        window.setButtonLoading = function(button, isLoading, loadingText = 'İşleniyor...') {
             if (!button) return;
             const spinner = button.querySelector('.spinner-border-sm');
             const icon = button.querySelector('.icon-idle');
             const textSpan = button.querySelector('.button-text');
-
+            button.disabled = isLoading;
             if (isLoading) {
-                button.disabled = true;
                 button.classList.add('loading');
+                if(spinner) spinner.style.display = 'inline-block';
+                if(icon) icon.style.display = 'none';
                 if (textSpan) textSpan.textContent = loadingText;
             } else {
                 button.classList.remove('loading');
-                // originalText dataset'ten alınacak, resetButtonState'te set ediliyor.
+                if(spinner) spinner.style.display = 'none';
+                if(icon) icon.style.display = 'inline-block';
                 if (textSpan && button.dataset.originalText) textSpan.textContent = button.dataset.originalText;
             }
-        }
+        };
 
-        function resetButtonState(button, originalText) {
+        window.resetButtonState = function(button, originalText) {
             if (!button) return;
-            button.dataset.originalText = originalText; // Orijinal metni sakla
-            setButtonLoading(button, false); // Yüklenme durumunu kaldır
-            // setButtonLoading zaten metni güncelleyecek
-        }
+            button.dataset.originalText = originalText;
+            const textSpan = button.querySelector('.button-text');
+            if (textSpan) textSpan.textContent = originalText;
+            window.setButtonLoading(button, false);
+        };
+
+        window.findButtonByTaskKey = function(taskKey) {
+            if (!activeTasksButtonsArea || !taskKey) return null;
+            return activeTasksButtonsArea.querySelector(`button[data-task-key="${taskKey}"]`);
+        };
+
+        window.disableOtherTaskButtons = function(currentTaskKey, isDisabled) {
+            if (activeTasksButtonsArea) {
+                const buttons = activeTasksButtonsArea.querySelectorAll('button[data-task-key]');
+                buttons.forEach(btn => {
+                    if (currentTaskKey === null || btn.dataset.taskKey !== currentTaskKey) {
+                        window.setButtonLoading(btn, isDisabled, btn.dataset.originalText || 'İşleniyor...');
+                    }
+                    btn.disabled = isDisabled;
+                });
+            }
+            if (cancelCargoButton) {
+                window.setButtonLoading(cancelCargoButton, isDisabled, cancelCargoButton.dataset.originalText || 'Kargoyu İptal Et');
+                cancelCargoButton.disabled = isDisabled;
+            }
+            if (submitInvoiceButton && invoiceEntryForm && invoiceEntryForm.style.display === 'block') {
+                window.setButtonLoading(submitInvoiceButton, isDisabled, submitInvoiceButton.dataset.originalText || 'Faturayı Kaydet...');
+                submitInvoiceButton.disabled = isDisabled;
+            }
+        };
     </script>
 </th:block>
-
 </body>
 </html>

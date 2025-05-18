@@ -1,6 +1,5 @@
 package com.ozansoyak.cargo_process_tracking.controller;
 
-// ApproveNextStepRequest importu kaldırıldı
 import com.ozansoyak.cargo_process_tracking.dto.CreateCargoRequest;
 import com.ozansoyak.cargo_process_tracking.dto.CargoResponse;
 import com.ozansoyak.cargo_process_tracking.dto.TrackingInfoResponse;
@@ -9,13 +8,12 @@ import jakarta.persistence.EntityNotFoundException;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-// TaskNotFoundException importu KALDIRILDI
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.util.StringUtils; // StringUtils eklendi
 
 import java.util.Map;
-
 
 @RestController
 @RequestMapping("/api/cargos")
@@ -27,8 +25,7 @@ public class CargoController {
 
     @PostMapping
     public ResponseEntity<?> createCargoAndStartProcess(@Valid @RequestBody CreateCargoRequest request) {
-        // ... (Aynı)
-        log.info("POST /api/cargos isteği alındı: {}", request.getReceiverName());
+        log.info("POST /api/cargos isteği alındı. Alıcı: {}", request.getReceiverName());
         try {
             CargoResponse response = cargoService.createCargoAndStartProcess(request);
             log.info("Kargo başarıyla oluşturuldu ve süreç başlatıldı: Takip No: {}", response.getTrackingNumber());
@@ -36,70 +33,80 @@ public class CargoController {
         } catch (Exception e) {
             log.error("Kargo oluşturulurken hata oluştu: {}", e.getMessage(), e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body("Kargo oluşturulurken bir hata oluştu: " + e.getMessage());
+                    .body(Map.of("message", "Kargo oluşturulurken bir hata oluştu: " + e.getMessage()));
         }
     }
 
     @PutMapping("/{trackingNumber}/cancel")
-    public ResponseEntity<?> cancelCargoProcess(@PathVariable(name = "trackingNumber") String trackingNumber) {
-        // ... (Aynı)
+    public ResponseEntity<?> cancelCargoProcess(@PathVariable String trackingNumber) {
         log.info("PUT /api/cargos/{}/cancel isteği alındı.", trackingNumber);
+        if (!StringUtils.hasText(trackingNumber)) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(Map.of("message", "Takip numarası boş olamaz."));
+        }
         try {
-            cargoService.cancelCargoProcess(trackingNumber);
+            cargoService.cancelCargoProcess(trackingNumber.trim());
             log.info("Takip numarası {} olan kargo için iptal işlemi başarıyla tetiklendi/tamamlandı.", trackingNumber);
-            return ResponseEntity.ok().body("Kargo süreci iptal edildi veya iptal işlemi başlatıldı.");
+            return ResponseEntity.ok().body(Map.of("message", "Kargo süreci iptal edildi veya iptal işlemi başlatıldı."));
         } catch (EntityNotFoundException e) {
             log.warn("Kargo iptal edilemedi, bulunamadı: {}", e.getMessage());
-            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(e.getMessage());
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of("message", e.getMessage()));
         } catch (IllegalStateException e) {
             log.warn("Kargo iptal edilemedi, geçersiz durum: {}", e.getMessage());
-            return ResponseEntity.status(HttpStatus.CONFLICT).body(e.getMessage());
-        }
-        catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.CONFLICT).body(Map.of("message", e.getMessage()));
+        } catch (Exception e) {
             log.error("Kargo iptali sırasında beklenmedik hata oluştu (Takip No: {}): {}", trackingNumber, e.getMessage(), e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body("Kargo iptal edilirken bir hata oluştu: " + e.getMessage());
+                    .body(Map.of("message", "Kargo iptal edilirken bir hata oluştu: " + e.getMessage()));
         }
     }
 
-    // YENİ ENDPOINT: Aktif görevi tamamlar ve sonraki adımı hazırlar
-    @PutMapping("/{trackingNumber}/complete-step")
-    public ResponseEntity<?> completeUserTaskAndPrepareNextStep(@PathVariable(name = "trackingNumber") String trackingNumber) {
-        log.info("PUT /api/cargos/{}/complete-step isteği alındı.", trackingNumber);
+    @PutMapping("/{trackingNumber}/complete-step/{taskDefinitionKey}")
+    public ResponseEntity<?> completeUserTaskAndPrepareNextStep(
+            @PathVariable String trackingNumber,
+            @PathVariable String taskDefinitionKey,
+            @RequestBody(required = false) Map<String, Object> taskVariables) { // Opsiyonel body
+        log.info("PUT /api/cargos/{}/complete-step/{} isteği alındı. Değişkenler: {}",
+                trackingNumber, taskDefinitionKey, (taskVariables != null && !taskVariables.isEmpty()) ? taskVariables.keySet() : "Yok");
+
+        if (!StringUtils.hasText(trackingNumber) || !StringUtils.hasText(taskDefinitionKey)) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(Map.of("message", "Takip numarası ve görev anahtarı boş olamaz."));
+        }
+
         try {
-            cargoService.completeUserTaskAndPrepareNextStep(trackingNumber);
-            log.info("Takip numarası {} için aktif görev tamamlandı ve sonraki adım hazırlandı.", trackingNumber);
-            return ResponseEntity.ok().body("Aktif görev tamamlandı, süreç ilerletildi.");
-        } catch (EntityNotFoundException e) { // Kargo veya Aktif Görev bulunamadığında bu dönebilir
-            log.warn("Görev tamamlanamadı, kargo veya aktif görev bulunamadı: {}", e.getMessage());
-            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(e.getMessage());
-            // ------- DÜZELTME: TaskNotFoundException yerine IllegalStateException veya genel Exception yakala --------
-        } catch (IllegalArgumentException e) { // Tanımsız görev veya durum için
-            log.warn("Görev tamamlanamadı, geçersiz istek/durum: {}", e.getMessage());
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(e.getMessage());
-        } catch (IllegalStateException e) { // Aktif süreç yoksa veya Camunda görev tamamlama hatası
-            log.warn("Görev tamamlanamadı, geçersiz süreç durumu: {}", e.getMessage());
-            return ResponseEntity.status(HttpStatus.CONFLICT).body(e.getMessage());
-        } catch (Exception e) { // Diğer beklenmedik hatalar
-            log.error("Görev tamamlama sırasında beklenmedik hata oluştu (Takip No: {}): {}", trackingNumber, e.getMessage(), e);
+            cargoService.completeUserTaskAndPrepareNextStep(trackingNumber.trim(), taskDefinitionKey.trim(), taskVariables);
+            log.info("Takip numarası {} için '{}' görevi tamamlandı ve sonraki adım hazırlandı.", trackingNumber, taskDefinitionKey);
+            return ResponseEntity.ok().body(Map.of("message", "'" + taskDefinitionKey + "' adlı görev başarıyla tamamlandı."));
+        } catch (EntityNotFoundException e) {
+            log.warn("Görev tamamlanamadı, kargo veya aktif görev ('{}') bulunamadı: {}", taskDefinitionKey, e.getMessage());
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of("message", e.getMessage()));
+        } catch (IllegalArgumentException e) { // Genellikle servis içinden atılır (örn: taskDefinitionKey boşsa)
+            log.warn("Görev ('{}') tamamlanamadı, geçersiz istek/argüman: {}", taskDefinitionKey, e.getMessage());
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(Map.of("message", e.getMessage()));
+        } catch (IllegalStateException e) { // Genellikle süreç durumu uygun değilse atılır
+            log.warn("Görev ('{}') tamamlanamadı, geçersiz süreç durumu: {}", taskDefinitionKey, e.getMessage());
+            return ResponseEntity.status(HttpStatus.CONFLICT).body(Map.of("message", e.getMessage()));
+        } catch (Exception e) {
+            log.error("Görev ('{}') tamamlama sırasında beklenmedik hata (Takip No: {}): {}", taskDefinitionKey, trackingNumber, e.getMessage(), e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body("Görev tamamlanırken bir hata oluştu: " + e.getMessage());
+                    .body(Map.of("message", "Görev tamamlanırken bir sunucu hatası oluştu: " + e.getMessage()));
         }
     }
 
-    // approve-step ENDPOINT'İ KALDIRILDI
-
-    @GetMapping("/details/{trackingNumber}") // GET /api/cargos/details/{tn}
+    @GetMapping("/details/{trackingNumber}")
     public ResponseEntity<?> getCargoDetailsForModal(@PathVariable String trackingNumber) {
         log.info("GET /api/cargos/details/{} isteği alındı (Modal için).", trackingNumber);
+        if (!StringUtils.hasText(trackingNumber)) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(Map.of("message", "Takip numarası boş olamaz."));
+        }
         try {
             TrackingInfoResponse trackingInfo = cargoService.getTrackingInfo(trackingNumber.trim());
-            log.info("Takip bilgisi bulundu (API-Detay): {}", trackingNumber);
-            return ResponseEntity.ok(trackingInfo); // DTO'yu JSON olarak döndür
+            log.debug("Takip bilgisi bulundu (API-Detay): {} -> {}", trackingNumber, trackingInfo.getCurrentStatus());
+            return ResponseEntity.ok(trackingInfo);
         } catch (EntityNotFoundException e) {
             log.warn("Takip numarası bulunamadı (API-Detay): {}", trackingNumber);
             return ResponseEntity.status(HttpStatus.NOT_FOUND)
-                    .body(Map.of("message", e.getMessage()));
+                    .body(Map.of("message", e.getMessage())); // Direkt mesajı body'ye koyabiliriz.
         } catch (Exception e) {
             log.error("Kargo detay (API) alınırken beklenmedik hata (Takip No: {}): {}", trackingNumber, e.getMessage(), e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
