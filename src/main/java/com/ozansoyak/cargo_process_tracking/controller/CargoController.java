@@ -114,4 +114,28 @@ public class CargoController {
                     .body(Map.of("message", "Detay bilgileri alınırken sunucu hatası oluştu."));
         }
     }
+
+    // --- YENİ ENDPOINT: Belirli bir Task ID ile görev tamamlama ---
+    // Bu endpoint, paneldeki görev listesinden belirli bir görevi tamamlamak için daha uygundur.
+    @PutMapping("/tasks/{taskId}/complete") // Path'i /api/tasks/{taskId}/complete de yapabilirsiniz
+    public ResponseEntity<?> completeTaskById(@PathVariable String taskId) {
+        log.info("PUT /api/cargos/tasks/{}/complete isteği alındı.", taskId);
+        try {
+            cargoService.completeTaskByIdAndPrepareNextStep(taskId);
+            // Başarı mesajı, hangi görevin tamamlandığını belirtebilir.
+            // Task task = taskService.createTaskQuery().taskId(taskId).singleResult(); // Artık yok
+            // String taskName = task != null ? task.getName() : taskId;
+            return ResponseEntity.ok(Map.of("message", "Görev (ID: " + taskId + ") başarıyla tamamlandı."));
+        } catch (EntityNotFoundException e) {
+            log.warn("Görev tamamlanamadı (ID: {}), bulunamadı: {}", taskId, e.getMessage());
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of("message", e.getMessage()));
+        } catch (IllegalStateException e) {
+            log.warn("Görev tamamlanamadı (ID: {}), geçersiz durum: {}", taskId, e.getMessage());
+            return ResponseEntity.status(HttpStatus.CONFLICT).body(Map.of("message", e.getMessage()));
+        } catch (Exception e) {
+            log.error("Görev (ID: {}) tamamlanırken beklenmedik hata: {}", taskId, e.getMessage(), e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(Map.of("message", "Görev tamamlanırken bir hata oluştu: " + e.getMessage()));
+        }
+    }
 }

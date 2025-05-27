@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="tr"
+      xmlns:th="http://www.thymeleaf.org"
+      xmlns:layout="http://www.ultraq.net.nz/thymeleaf/layout"
+      xmlns:sec="http://www.thymeleaf.org/extras/spring-security"
+      layout:decorate="~{layout/main-layout}">
+<head>
+    <title layout:fragment="title">BPMN Yükle</title>
+    <!-- Bu sayfaya özel stil varsa buraya eklenebilir -->
+    <th:block layout:fragment="pageStyles">
+        <style>
+            /* deploy-form.html'e özel stiller (gerekirse) */
+            .card {
+                /* main-layout.html'deki genel .card stilini kullanabilir
+                   veya burada özelleştirebilirsiniz.
+                   Örnek olarak, eğer layout'ta yoksa: */
+                box-shadow: 0 0.125rem 0.25rem rgba(0,0,0,.075);
+            }
+            .form-text {
+                font-size: .875em;
+                color: #6c757d;
+            }
+        </style>
+    </th:block>
+</head>
+<body>
+
+<!-- Ana İçerik Alanı -->
+<div layout:fragment="content">
+    <h2 class="mb-4 border-bottom pb-2">Yeni BPMN Süreci Yükle</h2>
+
+    <!-- Flash Mesajlar -->
+    <div th:if="${successMessage}" class="alert alert-success alert-dismissible fade show" role="alert">
+        <i class="bi bi-check-circle-fill me-2"></i>
+        <span th:text="${successMessage}"></span>
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    </div>
+    <div th:if="${errorMessage}" class="alert alert-danger alert-dismissible fade show" role="alert">
+        <i class="bi bi-exclamation-triangle-fill me-2"></i>
+        <span th:text="${errorMessage}"></span>
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    </div>
+    <div th:if="${warningMessage}" class="alert alert-warning alert-dismissible fade show" role="alert">
+        <i class="bi bi-exclamation-triangle-fill me-2"></i>
+        <span th:text="${warningMessage}"></span>
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    </div>
+
+    <div class="card">
+        <div class="card-body">
+            <!-- Form action'ı DeploymentController'daki @PostMapping("/upload") ile eşleşmeli -->
+            <!-- Base path /panel/deployments olduğu için @{/panel/deployments/upload} olacak -->
+            <form method="POST" enctype="multipart/form-data" th:action="@{/panel/deployments/upload}" class="needs-validation" novalidate>
+                <div class="mb-3">
+                    <label for="deploymentName" class="form-label">Deployment Adı <span class="text-muted">(Opsiyonel, boş bırakılırsa dosya adı kullanılır)</span></label>
+                    <input type="text" class="form-control" id="deploymentName" name="deploymentName" placeholder="Örn: KargoSureci_v2">
+                    <div class="form-text">Bu ad, Camunda Cockpit'te deployment'ı tanımlamanıza yardımcı olur.</div>
+                </div>
+                <div class="mb-3">
+                    <label for="file" class="form-label fw-bold">BPMN Dosyası Seçin</label>
+                    <input class="form-control" type="file" id="file" name="file" accept=".bpmn,.bpmn20.xml" required>
+                    <div class="invalid-feedback">Lütfen bir BPMN dosyası (.bpmn veya .bpmn20.xml) seçin.</div>
+                </div>
+                <button type="submit" class="btn btn-primary">
+                    <i class="bi bi-cloud-arrow-up-fill me-2"></i>Yükle ve Deploy Et
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <hr class="my-4">
+
+    <a th:href="@{/panel/deployments/start-instance}" class="btn btn-outline-info">
+        <i class="bi bi-play-circle-fill me-2"></i>Deploy Edilmiş Süreçlerden Başlat
+    </a>
+</div>
+
+<!-- Sayfaya Özel Scriptler -->
+<th:block layout:fragment="pageScripts">
+    <!-- Bootstrap Validation Script -->
+    <script>
+        (() => {
+            'use strict'
+            const forms = document.querySelectorAll('.needs-validation')
+            Array.from(forms).forEach(form => {
+                form.addEventListener('submit', event => {
+                    if (!form.checkValidity()) {
+                        event.preventDefault()
+                        event.stopPropagation()
+                    }
+                    form.classList.add('was-validated')
+                }, false)
+            })
+        })()
+    </script>
+</th:block>
+
+</body>
+</html>

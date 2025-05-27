@@ -4,6 +4,11 @@ import com.ozansoyak.cargo_process_tracking.dto.*;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import java.util.Map;
+import org.springframework.data.domain.Page; // Page eklendi
+import org.springframework.data.domain.Pageable; // Pageable eklendi
+
+import java.util.List;
+
 
 public interface CargoService {
 
@@ -18,4 +23,8 @@ public interface CargoService {
     PanelDataDto getPanelData();
 
     Page<CargoSearchResultDto> searchCargos(CargoSearchCriteria criteria, Pageable pageable);
+
+    List<ActiveTaskDto> getActiveUserTasks(String username, List<String> userGroups); // YENİ
+
+    void completeTaskByIdAndPrepareNextStep(String taskId); // YENİ
 }

@@ -63,3 +63,6 @@ camunda:
       lock-time-in-millis: 300000
       wait-time-in-millis: 5000
       deployment-aware: true
+    generic-properties:
+      properties:
+        historyTimeToLive: P30D

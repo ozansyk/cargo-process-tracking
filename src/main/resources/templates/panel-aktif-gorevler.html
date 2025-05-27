@@ -1,0 +1,202 @@
+<!doctype html>
+<html lang="tr"
+      xmlns:th="http://www.thymeleaf.org"
+      xmlns:layout="http://www.ultraq.net.nz/thymeleaf/layout"
+      xmlns:sec="http://www.thymeleaf.org/extras/spring-security"
+      layout:decorate="~{layout/main-layout}">
+<head>
+    <title layout:fragment="title">Aktif Görevlerim</title>
+    <th:block layout:fragment="pageStyles">
+        <style>
+            /* Bu sayfaya özel stiller, gerekirse */
+            .table-sm th, .table-sm td {
+                padding: 0.5rem; /* main-layout'taki 0.4rem'i ezebiliriz */
+                vertical-align: middle;
+            }
+            .action-btn-group .btn {
+                margin-right: 0.25rem; /* Butonlar arası küçük boşluk */
+            }
+            .action-btn-group .btn:last-child {
+                margin-right: 0;
+            }
+        </style>
+    </th:block>
+</head>
+<body>
+
+<div layout:fragment="content">
+    <h2 class="mb-4 border-bottom pb-2">Aktif Görevlerim</h2>
+
+    <div id="taskUpdateResult" class="mb-3">
+        <!-- AJAX ile görev tamamlama sonrası mesajlar buraya gelecek -->
+        <div th:if="${successMessage}" class="alert alert-success alert-dismissible fade show" role="alert">
+            <i class="bi bi-check-circle-fill me-2"></i>
+            <span th:text="${successMessage}"></span>
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+        <div th:if="${errorMessage}" class="alert alert-danger alert-dismissible fade show" role="alert">
+            <i class="bi bi-exclamation-triangle-fill me-2"></i>
+            <span th:text="${errorMessage}"></span>
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+    </div>
+
+    <div th:if="${#lists.isEmpty(activeTasks)}" class="alert alert-info" role="alert">
+        Tamamlanacak aktif bir göreviniz bulunmamaktadır.
+    </div>
+
+    <div th:if="${not #lists.isEmpty(activeTasks)}" class="table-responsive">
+        <table class="table table-striped table-hover table-sm align-middle">
+            <thead class="table-light">
+            <tr>
+                <th>Görev Adı</th>
+                <th>Takip No / İş Anahtarı</th>
+                <th>Süreç Adı</th>
+                <th>Oluşturulma Zamanı</th>
+                <th>Atanan Kişi/Grup</th>
+                <th class="text-center">Aksiyon</th>
+            </tr>
+            </thead>
+            <tbody>
+            <tr th:each="task : ${activeTasks}"> <!-- Controller'dan gelen activeTasks listesi -->
+                <td th:text="${task.taskName ?: task.taskDefinitionKey}">Görev Adı</td>
+                <td>
+                    <!-- Eğer bu kargo süreciyse ve businessKey varsa, sorgulama sayfasına link ver -->
+                    <a th:if="${task.businessKey != null and task.processDefinitionName != null and #strings.containsIgnoreCase(task.processDefinitionName, 'Kargo')}"
+                       th:href="@{/panel/sorgula(trackingNo=${task.businessKey})}"
+                       th:text="${task.businessKey}"
+                       title="Kargo Detaylarını Görüntüle"></a>
+                    <span th:unless="${task.businessKey != null and task.processDefinitionName != null and #strings.containsIgnoreCase(task.processDefinitionName, 'Kargo')}"
+                          th:text="${task.businessKey ?: '-'}"></span>
+                </td>
+                <td th:text="${task.processDefinitionName ?: 'Bilinmiyor'}">Süreç Adı</td>
+                <td th:text="${task.createTime != null ? #temporals.format(task.createTime, 'dd.MM.yyyy HH:mm') : '-'}">Tarih</td>
+                <td th:text="${task.assignee ?: (task.candidateGroups != null and not #lists.isEmpty(task.candidateGroups) ? #strings.listJoin(task.candidateGroups, ', ') : 'Havuz Görevi')}">Atanan</td>
+                <td class="text-center">
+                    <!-- DİKKAT: onclick fonksiyonuna window. ekledik -->
+                    <button type="button" class="btn btn-sm btn-success"
+                            th:attr="data-task-id=${task.taskId}, data-task-name=${task.taskName ?: task.taskDefinitionKey}"
+                            onclick="window.completeGenericTask(this.getAttribute('data-task-id'), this.getAttribute('data-task-name'))">
+                        <i class="bi bi-check-lg"></i> Tamamla
+                    </button>
+                    <!-- TODO: Göreve gitmek için bir link/buton (örn: Camunda Tasklist veya özel bir form) eklenebilir -->
+                    <!--
+                    <a th:href="@{'/camunda/app/tasklist/default/#/task/' + ${task.taskId}}" target="_blank" class="btn btn-sm btn-outline-primary" title="Camunda Tasklist'te Aç">
+                        <i class="bi bi-box-arrow-up-right"></i>
+                    </a>
+                    -->
+                </td>
+            </tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<th:block layout:fragment="pageScripts">
+    <script th:inline="javascript">
+        const taskUpdateResultDiv = document.getElementById('taskUpdateResult');
+        const csrfToken = /*[[${_csrf != null ? _csrf.token : null}]]*/ null; // CSRF token (gerekirse)
+        const csrfHeaderName = /*[[${_csrf != null ? _csrf.headerName : null}]]*/ null; // CSRF başlık adı
+
+        // Fonksiyonu window nesnesine atayarak global yapalım
+        window.completeGenericTask = function(taskId, taskName) {
+            if (!taskId) return;
+            const taskNameToConfirm = taskName || taskId;
+            if (!confirm(`'${taskNameToConfirm}' görevini tamamlamak istediğinizden emin misiniz?`)) {
+                return;
+            }
+
+            if(taskUpdateResultDiv) {
+                taskUpdateResultDiv.innerHTML = '<div class="alert alert-info py-2">İşleniyor... <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span></div>';
+            }
+            const buttonElement = document.querySelector(`button[data-task-id="${taskId}"]`);
+            if(buttonElement) buttonElement.disabled = true;
+
+            const headers = {
+                'Content-Type': 'application/json'
+            };
+            if (csrfToken && csrfHeaderName) {
+                headers[csrfHeaderName] = csrfToken;
+            }
+
+            // GENEL BİR GÖREV TAMAMLAMA ENDPOINT'İ KULLANILDIĞINI VARSAYIYORUZ
+            // Bu endpoint, taskId alır ve görevi tamamlar. Eğer görev kargo süreciyle ilgiliyse
+            // ve özel değişkenler gerekiyorsa (panel-sorgula'daki gibi), bu sayfa o tür görevleri
+            // direkt tamamlamak için uygun olmayabilir. Bu sayfa daha çok genel, inputsuz görevler için.
+            // Veya her görev tipi için farklı bir modal/form açılabilir.
+            // Şimdilik basit bir PUT isteği varsayıyoruz.
+            // Sizin için doğru endpoint: /api/cargos/{trackingNumber}/complete-step/{taskDefinitionKey} idi.
+            // Bu sayfada trackingNumber ve taskDefinitionKey bilgisine ihtiyacımız var.
+            // Bu bilgiler `task` objesinden (eğer controller'da TaskDetailDto'ya eklerseniz) alınabilir.
+            // Şimdilik genel bir /api/tasks/{taskId}/complete endpoint'i varsayalım.
+            // YA DA: Bu sayfadaki "Tamamla" butonu, kargo görevleri için panel-sorgula modalını açabilir.
+            // Biz şimdilik basit bir tamamlama varsayalım.
+            // Eğer bu görevler Kargo sürecine aitse ve takip no (businessKey) ve taskDefinitionKey varsa, panel-sorgula'daki API'yi kullanabiliriz.
+            // Bu durumda controller'dan gelen `task` objesinin businessKey ve taskDefinitionKey alanlarını içermesi gerekir.
+
+            // ÖRNEK: Eğer kargo süreciyse ve bilgiler varsa panel-sorgula API'sini kullanalım
+            const taskRow = buttonElement.closest('tr');
+            const businessKeyElement = taskRow.querySelector('td:nth-child(2) a, td:nth-child(2) span'); // Takip No/Business Key olan hücre
+            const businessKey = businessKeyElement ? businessKeyElement.textContent.trim() : null;
+            const taskDefKey = taskName === taskId ? taskId : buttonElement.getAttribute('data-task-name'); // Bu taskName, aslında taskDefinitionKey olmalıydı.
+                                                                                                            // Ya da controller'dan task.taskDefinitionKey gelmeli.
+                                                                                                            // Şimdilik taskName'i taskDefinitionKey olarak varsayalım (hatalı olabilir)
+
+            let fetchUrl = `/api/generic-tasks/${taskId}/complete`; // Varsayılan genel endpoint
+            let requestBody = null;
+
+            // Modelinizdeki `activeTasks` listesindeki her bir task objesi `taskDefinitionKey` ve `businessKey` alanlarını içeriyorsa:
+            // const taskDefinitionKeyFromData = buttonElement.parentElement.parentElement.querySelector('td:nth-child(1)').textContent; // Bu güvenilir değil
+            // Güvenli yol: th:attr ile taskDefinitionKey'i de butona eklemek
+            // th:attr="data-task-id=${task.taskId}, data-task-name=${task.taskName}, data-task-def-key=${task.taskDefinitionKey}, data-business-key=${task.businessKey}"
+            // const taskDefinitionKey = buttonElement.getAttribute('data-task-def-key');
+            // const businessKeyForApi = buttonElement.getAttribute('data-business-key');
+
+            // Şimdilik basit bir task tamamlama (Camunda Tasklist gibi)
+            // Eğer bu görevler sizin Kargo süreciyle ilgiliyse, /api/cargos/{trackingNumber}/complete-step/{taskDefinitionKey} kullanılmalı.
+            // Bu durumda bu sayfaya gelen `activeTasks` listesindeki her bir task objesi `trackingNumber` (businessKey) ve `taskDefinitionKey` içermeli.
+            // Controller'da ActiveTaskDto'nuzu bu bilgileri içerecek şekilde güncelleyin.
+
+            // Varsayım: Controller'dan gelen "task" objesi şunları içeriyor: taskId, taskName, businessKey, taskDefinitionKey
+            // Bu scriptte task.businessKey ve task.taskDefinitionKey'i kullanmak için butona data attribute olarak eklememiz gerekirdi.
+            // Şimdilik fetchUrl'i placeholder olarak bırakıyorum. GERÇEK ENDPOINT'İNİZİ KULLANMALISINIZ.
+            // Eğer bu görevlerin hepsi kargo süreciyle ilgiliyse ve panel-sorgula'daki gibi tamamlanacaksa:
+            // fetchUrl = `/api/cargos/${businessKey}/complete-step/${taskDefinitionKey}`;
+
+
+            // BASİT GENEL TASK TAMAMLAMA ÖRNEĞİ (Sadece taskId ile)
+            // GERÇEK PROJENİZDE BU ENDPOINT'İN OLMASI GEREKİR VEYA
+            // KARGOYA ÖZEL ENDPOINT KULLANILMALIDIR.
+            fetchUrl = `/api/tasks/${taskId}/complete`; // BU ENDPOINT'İN SİZDE OLMASI LAZIM
+
+            fetch(fetchUrl, {
+                method: 'PUT',
+                headers: headers
+                // body: JSON.stringify(requestBody) // Eğer body gerekiyorsa
+            })
+                .then(response => {
+                    if (!response.ok) {
+                        return response.json().then(err => { throw new Error(err.message || `Sunucu hatası: ${response.status}`) });
+                    }
+                    // Yanıt JSON değilse veya mesaj içermiyorsa response.text() kullanılabilir.
+                    return response.json().catch(() => { return { message: 'Görev başarıyla tamamlandı!'}; });
+                })
+                .then(data => {
+                    if(taskUpdateResultDiv) {
+                        taskUpdateResultDiv.innerHTML = `<div class="alert alert-success py-2">${data.message || 'Görev başarıyla tamamlandı!'} Sayfa yenileniyor...</div>`;
+                    }
+                    setTimeout(() => { window.location.reload(); }, 2000);
+                })
+                .catch(error => {
+                    console.error("Görev tamamlama hatası:", error);
+                    if(taskUpdateResultDiv) {
+                        taskUpdateResultDiv.innerHTML = `<div class="alert alert-danger py-2">Hata: ${error.message}</div>`;
+                    }
+                    if(buttonElement) buttonElement.disabled = false;
+                });
+        };
+    </script>
+</th:block>
+
+</body>
+</html>

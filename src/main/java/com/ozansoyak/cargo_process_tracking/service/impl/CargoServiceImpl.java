@@ -14,8 +14,10 @@ import lombok.extern.slf4j.Slf4j;
 import org.camunda.bpm.engine.*;
 import org.camunda.bpm.engine.history.HistoricActivityInstance;
 import org.camunda.bpm.engine.history.HistoricProcessInstance; // Eklendi
+import org.camunda.bpm.engine.repository.ProcessDefinition;
 import org.camunda.bpm.engine.runtime.ProcessInstance;
 import org.camunda.bpm.engine.task.Task;
+import org.camunda.bpm.engine.task.TaskQuery;
 import org.camunda.bpm.model.bpmn.BpmnModelInstance;
 import org.camunda.bpm.model.bpmn.instance.ExtensionElements;
 import org.camunda.bpm.model.bpmn.instance.UserTask;
@@ -50,7 +52,7 @@ public class CargoServiceImpl implements CargoService {
     private final RepositoryService repositoryService;
     private final HistoryService historyService;
 
-    private static final String CAMUNDA_PROCESS_DEFINITION_KEY = "cargoTrackingProcessV3";
+    public static final String CAMUNDA_PROCESS_DEFINITION_KEY = "cargoTrackingProcessV3";
     private static final int MAX_TRACKING_NUMBER_ATTEMPTS = 10;
     private static final String NEXT_STEP_VARIABLE_PROPERTY_NAME = "nextStepVariable";
 
@@ -492,6 +494,154 @@ public class CargoServiceImpl implements CargoService {
                 .map(this::mapCargoToSearchResultDto)
                 .collect(Collectors.toList());
         return new PageImpl<>(resultList, pageable, cargoPage.getTotalElements());
+    }
+
+    // --- YENİ METOT: Aktif Kullanıcı Görevlerini Getir ---
+    @Override
+    @Transactional(readOnly = true)
+    public List<ActiveTaskDto> getActiveUserTasks(String username, List<String> userGroups) {
+        TaskQuery query = taskService.createTaskQuery().active();
+
+        boolean hasUserCriteria = StringUtils.hasText(username);
+        boolean hasGroupCriteria = !CollectionUtils.isEmpty(userGroups);
+
+        if (hasUserCriteria && hasGroupCriteria) {
+            // Hem kullanıcıya atanmış/aday OLDUĞU VEYA gruplarına aday olan görevler
+            query.or()
+                    .taskAssignee(username)
+                    .taskCandidateUser(username)
+                    .taskCandidateGroupIn(userGroups)
+                    .endOr();
+        } else if (hasUserCriteria) {
+            // Sadece kullanıcıya atanmış VEYA aday olduğu görevler
+            query.or()
+                    .taskAssignee(username)
+                    .taskCandidateUser(username)
+                    .endOr();
+        } else if (hasGroupCriteria) {
+            // Sadece gruplara aday olan görevler
+            query.taskCandidateGroupIn(userGroups);
+        }
+        // Eğer username ve userGroups yoksa (else durumu), query'ye hiçbir ek filtre eklenmez
+        // ve .active() ile başlayan sorgu tüm aktif görevleri getirir. Bu genellikle admin senaryosudur.
+
+        List<Task> tasks = query.orderByTaskCreateTime().desc().list();
+        log.info("Kullanıcı '{}', gruplar {} için {} aktif görev bulundu.", username, userGroups, tasks.size());
+
+        return tasks.stream().map(task -> {
+            ProcessInstance pi = null;
+            if (task.getProcessInstanceId() != null) {
+                // Aktif süreç örneğini bulmaya çalış, bulunamazsa null olur
+                List<ProcessInstance> instances = runtimeService.createProcessInstanceQuery()
+                        .processInstanceId(task.getProcessInstanceId())
+                        .list();
+                if (!instances.isEmpty()) {
+                    pi = instances.get(0);
+                }
+            }
+            ProcessDefinition pd = null;
+            if (task.getProcessDefinitionId() != null) {
+                try {
+                    pd = repositoryService.getProcessDefinition(task.getProcessDefinitionId());
+                } catch (ProcessEngineException e) {
+                    log.warn("Süreç tanımı bulunamadı: ID {}", task.getProcessDefinitionId());
+                }
+            }
+
+            String candidateGroupString = null;
+            if (task.getId() != null) {
+                candidateGroupString = taskService.getIdentityLinksForTask(task.getId()).stream()
+                        .filter(link -> link.getGroupId() != null && "candidate".equals(link.getType()))
+                        .map(link -> link.getGroupId())
+                        .collect(Collectors.joining(", "));
+                if (candidateGroupString.isEmpty()) candidateGroupString = null;
+            }
+
+            return ActiveTaskDto.builder()
+                    .taskId(task.getId())
+                    .taskName(task.getName())
+                    .taskDefinitionKey(task.getTaskDefinitionKey())
+                    .processInstanceId(task.getProcessInstanceId())
+                    .processDefinitionName(pd != null ? pd.getName() : (task.getProcessDefinitionId() != null ? "Tanım ID: "+task.getProcessDefinitionId() : "N/A"))
+                    .businessKey(pi != null ? pi.getBusinessKey() : (task.getCaseInstanceId() != null ? "CMMN Case" : null))
+                    .createTime(task.getCreateTime() != null ? task.getCreateTime().toInstant().atZone(ZoneId.systemDefault()).toLocalDateTime() : null)
+                    .assignee(task.getAssignee())
+                    .candidateGroups(candidateGroupString)
+                    .build();
+        }).collect(Collectors.toList());
+    }
+
+    // --- YENİ METOT: Task ID ile Görev Tamamlama ---
+    @Override
+    @Transactional
+    public void completeTaskByIdAndPrepareNextStep(String taskId) {
+        log.info("Task ID '{}' ile görev tamamlama isteği.", taskId);
+        Task task = taskService.createTaskQuery().taskId(taskId).singleResult();
+        if (task == null) {
+            throw new EntityNotFoundException("Task ID '" + taskId + "' ile aktif görev bulunamadı.");
+        }
+
+        String processInstanceId = task.getProcessInstanceId();
+        String taskDefinitionKey = task.getTaskDefinitionKey();
+        String processDefinitionId = task.getProcessDefinitionId();
+        log.info("Tamamlanacak görev: Task ID: {}, Task Key: {}, PI_ID: {}", taskId, taskDefinitionKey, processInstanceId);
+
+        // Süreç değişkeni ayarlama mantığı (completeUserTaskAndPrepareNextStep'teki gibi)
+        String variableNameToSet = null;
+        if (processDefinitionId != null) { // Sadece süreç görevleri için
+            try {
+                BpmnModelInstance modelInstance = repositoryService.getBpmnModelInstance(processDefinitionId);
+                if (modelInstance == null) throw new IllegalStateException("BPMN modeli bulunamadı: " + processDefinitionId);
+
+                org.camunda.bpm.model.bpmn.instance.FlowNode flowNodeElement = modelInstance.getModelElementById(taskDefinitionKey);
+                if (flowNodeElement instanceof UserTask) { // Sadece UserTask ise extension property ara
+                    UserTask userTaskElement = (UserTask) flowNodeElement;
+                    ExtensionElements extensionElements = userTaskElement.getExtensionElements();
+                    if (extensionElements != null) {
+                        List<CamundaProperties> propertiesList = extensionElements.getElementsQuery().filterByType(CamundaProperties.class).list();
+                        if (!propertiesList.isEmpty()) {
+                            CamundaProperties camundaProperties = propertiesList.get(0);
+                            Optional<CamundaProperty> nextStepProp = camundaProperties.getCamundaProperties().stream()
+                                    .filter(prop -> NEXT_STEP_VARIABLE_PROPERTY_NAME.equals(prop.getCamundaName())).findFirst();
+                            if (nextStepProp.isPresent() && StringUtils.hasText(nextStepProp.get().getCamundaValue())) {
+                                variableNameToSet = nextStepProp.get().getCamundaValue();
+                                log.info("BPMN'den sonraki adım değişkeni bulundu: '{}'", variableNameToSet);
+                            } else {
+                                log.info("Task Key '{}' için '{}' property değeri boş veya yok.", taskDefinitionKey, NEXT_STEP_VARIABLE_PROPERTY_NAME);
+                            }
+                        }
+                    }
+                } else {
+                    log.info("Aktif element ('{}') bir UserTask değil, nextStepVariable aranmayacak.", taskDefinitionKey);
+                }
+            } catch (Exception e) {
+                log.error("BPMN modelinden '{}' property okunurken hata (Task Key: {}): {}", NEXT_STEP_VARIABLE_PROPERTY_NAME, taskDefinitionKey, e.getMessage(), e);
+                throw new IllegalStateException("Süreç ilerleme değişkeni BPMN'den okunamadı: " + e.getMessage(), e);
+            }
+        }
+
+
+        if (variableNameToSet != null && processInstanceId != null) {
+            try {
+                runtimeService.setVariable(processInstanceId, variableNameToSet, true);
+                log.info("Süreç (ID: {}) için '{}' değişkeni 'true' yapıldı.", processInstanceId, variableNameToSet);
+            } catch (ProcessEngineException e) {
+                log.error("Süreç (ID: {}) ilerleme değişkeni ('{}') ayarlanırken hata: {}", processInstanceId, variableNameToSet, e.getMessage(), e);
+                throw new IllegalStateException("Camunda değişken ayarı hatası: " + e.getMessage(), e);
+            }
+        } else if (variableNameToSet != null) {
+            log.warn("Değişken ('{}') set edilemedi çünkü processInstanceId null (Task ID: {}).", variableNameToSet, taskId);
+        } else {
+            log.info("Görev ('{}') için ayarlanacak ilerleme değişkeni yok.", taskDefinitionKey);
+        }
+
+        try {
+            taskService.complete(taskId);
+            log.info("Görev (Task ID: {}) başarıyla tamamlandı.", taskId);
+        } catch (ProcessEngineException e){
+            log.error("Görev (Task ID: {}) tamamlanırken Camunda hatası: {}", taskId, e.getMessage(), e);
+            throw new IllegalStateException("Görev (Task ID: " + taskId +") tamamlanamadı: " + e.getMessage(), e);
+        }
     }
 
     private CargoSearchResultDto mapCargoToSearchResultDto(Cargo cargo) {

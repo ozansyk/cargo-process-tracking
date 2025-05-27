@@ -19,10 +19,7 @@ import org.springframework.validation.BindingResult;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 
-import java.util.Arrays;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.stream.Collectors;
 
 @Controller
@@ -171,12 +168,62 @@ public class PanelController {
     }
 
     @GetMapping("/kullanici-yonetimi")
-    // @PreAuthorize("hasRole('ADMIN')") // Eğer Spring Security ile metot seviyesinde yetkilendirme kullanıyorsanız
-    public String showUserManagementPage(Model model, Authentication authentication) {
-        addCommonPanelAttributes(model, authentication, "kullaniciYonetimi"); // Aktif menü: kullaniciYonetimi
-        // TODO: Kullanıcı yönetimi için gerekli verileri model'e ekle
-        // model.addAttribute("users", userService.getAllUsers());
-        log.info("Kullanıcı yönetimi sayfasına erişildi.");
-        return "panel-kullanici-yonetimi"; // templates/panel-kullanici-yonetimi.html (Bu dosyayı oluşturmanız gerekir)
+    public String showUserManagementPage(Model model, Authentication authentication) { /* ... Önceki kod ... */
+        addUserAuthInfoToModel(model, authentication);
+        model.addAttribute("activePage", "kullaniciYonetimi");
+        return "panel-kullanici-yonetimi";
+    }
+
+    // --- YENİ: Aktif Görevler Sayfası ---
+    @GetMapping("/aktif-gorevler")
+    public String showActiveTasksPage(Model model, Authentication authentication) {
+        addUserAuthInfoToModel(model, authentication); // Navbar için kullanıcı bilgisi
+        model.addAttribute("activePage", "aktifGorevler"); // Sidebar için
+
+        String username = null;
+        List<String> userGroups = new ArrayList<>();
+
+        if (authentication != null && authentication.getPrincipal() instanceof UserDetails) {
+            UserDetails userDetails = (UserDetails) authentication.getPrincipal();
+            username = userDetails.getUsername();
+            userGroups = userDetails.getAuthorities().stream()
+                    .map(GrantedAuthority::getAuthority)
+                    // Spring Security genellikle "ROLE_" prefix'i ekler,
+                    // Camunda'da grup adı direkt kullanılır. Bu kısmı
+                    // Camunda'daki grup isimlerinizle eşleşecek şekilde ayarlayın.
+                    // Örneğin, eğer Camunda'da grup adı "kargo-calisanlari" ise
+                    // ve Spring Security rolü "ROLE_KARGO_CALISANLARI" ise,
+                    // burada bir dönüşüm yapmanız gerekebilir veya Camunda'da
+                    // grupları "ROLE_" prefix'i olmadan oluşturabilirsiniz.
+                    // Şimdilik, Camunda'daki grup adlarının Spring Security rollerinden
+                    // (prefixsiz) geldiğini varsayalım.
+                    .map(role -> role.startsWith("ROLE_") ? role.substring(5) : role)
+                    .collect(Collectors.toList());
+        }
+
+        List<ActiveTaskDto> activeTasks = cargoService.getActiveUserTasks(username, userGroups);
+        model.addAttribute("activeTasks", activeTasks);
+
+        return "panel-aktif-gorevler"; // resources/templates/panel-aktif-gorevler.html
+    }
+
+    // Yardımcı metot
+    public void addUserAuthInfoToModel(Model model, Authentication authentication) { /* ... Önceki kod ... */
+        String username = "Kullanıcı";
+        String roles = "";
+        if (authentication != null && authentication.isAuthenticated()) {
+            Object principal = authentication.getPrincipal();
+            if (principal instanceof UserDetails) {
+                username = ((UserDetails) principal).getUsername();
+                roles = ((UserDetails) principal).getAuthorities().stream()
+                        .map(GrantedAuthority::getAuthority)
+                        .map(role -> role.startsWith("ROLE_") ? role.substring(5) : role)
+                        .collect(Collectors.joining(", "));
+            } else {
+                username = principal.toString();
+            }
+        }
+        model.addAttribute("username", username);
+        model.addAttribute("userRoles", roles);
     }
 }

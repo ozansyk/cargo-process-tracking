@@ -6,13 +6,11 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <!-- Dinamik Başlık -->
     <title layout:title-pattern="$LAYOUT_TITLE - $CONTENT_TITLE">Kargo Takip Sistemi</title>
 
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css">
 
-    <!-- Ortak Stiller -->
     <style>
         :root { --navbar-height: 56px; --sidebar-width: 240px; }
         body { padding-top: var(--navbar-height); overflow-x: hidden; background-color: #f8f9fa; display: flex; flex-direction: column; min-height: 100vh; }
@@ -31,22 +29,18 @@
         .app-footer { text-align: center; padding: 1rem 0; background-color: #f8f9fa; border-top: 1px solid #dee2e6; margin-top: auto; font-size: 0.9rem; }
         .app-footer p { margin-bottom: 0.25rem; }
 
-        /* panel.html'den gelen genel card ve table stilleri (ihtiyaç duyulursa diğer sayfalarda da kullanılabilir) */
         .card { border: none; border-radius: .5rem; }
-        .card-title { font-size: 0.9rem; margin-bottom: 0.25rem; opacity: 0.9; } /* panel.html'deki card-title için */
-        /* panel-sorgula.html'deki card-title için */
+        .card-title { font-size: 0.9rem; margin-bottom: 0.25rem; opacity: 0.9; }
         .filter-card .card-title { font-size: 1.25rem; margin-bottom: 1rem !important; display: flex; align-items: center;}
-        .card-text { margin-bottom: 0; } /* panel.html'deki card-text için */
-        .table-sm th, .table-sm td { padding: 0.4rem; } /* panel.html için */
-        .badge { padding: 0.4em 0.6em; font-size: 0.9em; } /* panel.html için, panel-sorgula için biraz daha küçük */
+        .card-text { margin-bottom: 0; }
+        .table-sm th, .table-sm td { padding: 0.4rem; } /* Genel table-sm için, diğer sayfalar bunu ezebilir */
+        .badge { padding: 0.4em 0.6em; font-size: 0.9em; }
     </style>
 
-    <!-- Sayfaya Özel Stiller (Gerekirse) -->
     <th:block layout:fragment="pageStyles"></th:block>
 </head>
 <body>
 
-<!-- Sabit Üst Navbar -->
 <nav class="navbar navbar-expand-md navbar-dark fixed-top bg-dark">
     <div class="container-fluid">
         <a class="navbar-brand" th:href="@{/panel}">Kargo Takip Sistemi</a>
@@ -54,7 +48,6 @@
             <span class="navbar-toggler-icon"></span>
         </button>
         <div class="d-flex align-items-center">
-            <!-- Kullanıcı bilgisi controller'dan username ve userRoles olarak gelmeli -->
             <span class="navbar-text text-white me-3 d-none d-md-inline"
                   th:if="${username != null and userRoles != null}"
                   th:text="|Hoşgeldin, ${username} [${userRoles}]|">
@@ -68,8 +61,6 @@
 
 <div class="container-fluid">
     <div class="row">
-        <!-- Kenar Çubuğu (Sidebar) -->
-        <!-- activeMenuItem değişkeni controller'dan gönderilecek (örn: "anaPanel", "yeniKargo", "kargoSorgula") -->
         <nav id="sidebarMenu" class="col-md-3 col-lg-2 d-md-block sidebar collapse bg-light">
             <div class="position-sticky">
                 <ul class="nav flex-column pt-2">
@@ -88,9 +79,25 @@
                             <i class="bi bi-search"></i> Kargo Sorgula
                         </a>
                     </li>
+                    <!-- YENİ LİNK: Aktif Görevlerim -->
+                    <li class="nav-item">
+                        <a class="nav-link" th:href="@{/panel/aktif-gorevler}" th:classappend="${activeMenuItem == 'aktifGorevler' ? 'active' : ''}">
+                            <i class="bi bi-list-task"></i> Aktif Görevlerim
+                        </a>
+                    </li>
                     <li class="nav-item">
                         <a class="nav-link" href="#" th:classappend="${activeMenuItem == 'raporlar' ? 'active' : ''}">
                             <i class="bi bi-file-earmark-bar-graph"></i> Raporlar
+                        </a>
+                    </li>
+                    <li class="nav-item" sec:authorize="hasRole('ADMIN')">
+                        <a class="nav-link" th:href="@{/panel/deployments/new-bpmn}" th:classappend="${activeMenuItem == 'deployBPMN' ? 'active' : ''}">
+                            <i class="bi bi-cloud-arrow-up"></i> BPMN Yükle
+                        </a>
+                    </li>
+                    <li class="nav-item" sec:authorize="hasRole('ADMIN')">
+                        <a class="nav-link" th:href="@{/panel/deployments/start-instance}" th:classappend="${activeMenuItem == 'startInstance' ? 'active' : ''}">
+                            <i class="bi bi-play-circle"></i> Süreç Başlat
                         </a>
                     </li>
                     <li class="nav-item" sec:authorize="hasRole('ADMIN')">
@@ -119,15 +126,10 @@
             </div>
         </nav>
 
-        <!-- Ana İçerik Alanı Wrapper -->
         <div class="main-content-wrapper">
-            <!-- Dinamik Ana İçerik Alanı -->
             <main class="main-content" layout:fragment="content">
-                <!-- Buraya her sayfanın kendi içeriği gelecek -->
                 <p>Varsayılan içerik. Bu bölüm dekore eden sayfa tarafından değiştirilmeli.</p>
             </main>
-
-            <!-- Ortak Footer -->
             <footer class="app-footer">
                 <p>© 2025 Kargo Takip Sistemi</p>
                 <p>Ozan SOYAK</p>
@@ -137,8 +139,6 @@
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
-
-<!-- Sayfaya Özel Scriptler (Gerekirse) -->
 <th:block layout:fragment="pageScripts"></th:block>
 
 </body>

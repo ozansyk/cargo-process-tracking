@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="tr"
+      xmlns:th="http://www.thymeleaf.org"
+      xmlns:layout="http://www.ultraq.net.nz/thymeleaf/layout"
+      xmlns:sec="http://www.thymeleaf.org/extras/spring-security"
+      layout:decorate="~{layout/main-layout}">
+<head>
+    <title layout:fragment="title">Yeni Süreç Örneği Başlat</title>
+    <!-- Bu sayfaya özel stil varsa buraya eklenebilir -->
+    <th:block layout:fragment="pageStyles">
+        <style>
+            .card {
+                /* main-layout.html'deki genel .card stilini kullanabilir
+                   veya burada özelleştirebilirsiniz. */
+                box-shadow: 0 0.125rem 0.25rem rgba(0,0,0,.075);
+            }
+            .form-text {
+                font-size: .875em; /* Bootstrap varsayılanından biraz daha küçük */
+                color: #6c757d;   /* Bootstrap'in text-muted rengi */
+            }
+            /* Hata mesajları için biraz daha belirginlik */
+            .alert strong + span { /* Hata mesajlarında strong etiketten sonra gelen span için */
+                display: block;
+                margin-top: 0.25rem;
+            }
+        </style>
+    </th:block>
+</head>
+<body>
+
+<!-- Ana İçerik Alanı -->
+<div layout:fragment="content">
+    <h2 class="mb-4 border-bottom pb-2">Yeni Süreç Örneği Başlat</h2>
+
+    <!-- Flash Mesajlar -->
+    <div th:if="${successMessage}" class="alert alert-success alert-dismissible fade show" role="alert">
+        <i class="bi bi-check-circle-fill me-2"></i>
+        <span th:text="${successMessage}"></span>
+        <!-- trackingNumberInfo için ek gösterim -->
+        <div th:if="${trackingNumberInfo}" class="mt-1">
+            <strong th:text="${trackingNumberInfo}"></strong>
+        </div>
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    </div>
+    <div th:if="${errorMessage}" class="alert alert-danger alert-dismissible fade show" role="alert">
+        <i class="bi bi-exclamation-triangle-fill me-2"></i>
+        <span th:text="${errorMessage}"></span>
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    </div>
+    <div th:if="${warningMessage}" class="alert alert-warning alert-dismissible fade show" role="alert">
+        <i class="bi bi-exclamation-triangle-fill me-2"></i>
+        <span th:text="${warningMessage}"></span>
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    </div>
+
+
+    <div class="card">
+        <div class="card-body">
+            <!-- Form action'ı DeploymentController'daki @PostMapping("/start-instance") ile eşleşmeli -->
+            <!-- Base path /panel/deployments olduğu için @{/panel/deployments/start-instance} olacak -->
+            <form method="POST" th:action="@{/panel/deployments/start-instance}" th:object="${startRequest}" class="needs-validation" novalidate>
+                <div class="mb-3">
+                    <label for="processDefinitionKey" class="form-label fw-bold">Başlatılacak Süreç Tanımı:</label>
+                    <select class="form-select" id="processDefinitionKey" th:field="*{processDefinitionKey}" required>
+                        <option value="">--- Süreç Seçiniz ---</option>
+                        <option th:each="pd : ${processDefinitions}"
+                                th:value="${pd.key}"
+                                th:text="|${pd.name} (Key: ${pd.key}, Ver: ${pd.version})|"></option>
+                    </select>
+                    <!-- BindingResult hatası varsa göster -->
+                    <div class="invalid-feedback" th:if="${#fields.hasErrors('processDefinitionKey')}" th:errors="*{processDefinitionKey}"></div>
+                    <!-- Genel required mesajı (JS validasyonu için) -->
+                    <div class="invalid-feedback" th:unless="${#fields.hasErrors('processDefinitionKey')}">Lütfen bir süreç tanımı seçin.</div>
+                </div>
+
+                <div class="mb-3">
+                    <label for="businessKey" class="form-label">İş Anahtarı (Business Key) <span class="text-muted">(Opsiyonel, örn: Takip No)</span></label>
+                    <input type="text" class="form-control" id="businessKey" th:field="*{businessKey}" placeholder="Örn: KARGO-2024-001">
+                    <div class="invalid-feedback" th:if="${#fields.hasErrors('businessKey')}" th:errors="*{businessKey}"></div>
+                </div>
+
+                <h5 class="mt-4 mb-2">Başlangıç Değişkenleri <span class="text-muted small">(Opsiyonel)</span></h5>
+                <div class="mb-3">
+                    <label for="variablesString" class="form-label">Değişkenleri Girin:</label>
+                    <textarea class="form-control" id="variablesString" name="variablesString" rows="4"
+                              placeholder="Örn: cargoId=123;isUrgent=true;customerName=Ali Veli"></textarea>
+                    <div class="form-text">
+                        Değişkenleri <code>anahtar1=deger1;anahtar2=deger2</code> formatında, aralarına noktalı virgül (;) koyarak girin.
+                        <br/>Boolean için <code>true</code>/<code>false</code>, sayılar için direkt sayı (örn: <code>123</code> veya <code>150.75</code>) girin. Diğerleri metin olarak algılanır.
+                        <br/>Örnek: <code>orderId=siparis001;priority=high;amount=2500</code>
+                    </div>
+                </div>
+
+                <button type="submit" class="btn btn-primary">
+                    <i class="bi bi-play-fill me-2"></i>Süreç Başlat
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <hr class="my-4">
+
+    <a th:href="@{/panel/deployments/new-bpmn}" class="btn btn-outline-secondary">
+        <i class="bi bi-cloud-arrow-up-fill me-2"></i>Yeni BPMN Yükle
+    </a>
+</div>
+
+<!-- Sayfaya Özel Scriptler -->
+<th:block layout:fragment="pageScripts">
+    <!-- Bootstrap Validation Script -->
+    <script>
+        (() => {
+            'use strict'
+            const forms = document.querySelectorAll('.needs-validation')
+            Array.from(forms).forEach(form => {
+                form.addEventListener('submit', event => {
+                    if (!form.checkValidity()) {
+                        event.preventDefault()
+                        event.stopPropagation()
+                    }
+                    form.classList.add('was-validated')
+                }, false)
+            })
+        })()
+    </script>
+</th:block>
+
+</body>
+</html>

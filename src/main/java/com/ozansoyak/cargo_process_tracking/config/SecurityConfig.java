@@ -50,6 +50,9 @@ public class SecurityConfig {
                         // --- YENİ KURALLAR ---
                         // Kullanıcı Yönetimi sadece ADMIN rolüne sahip olanlar
                         .requestMatchers("/panel/kullanici-yonetimi").hasRole("ADMIN")
+                        .requestMatchers("/deployments/**").hasRole("ADMIN")
+                        .requestMatchers("/panel/aktif-gorevler").authenticated() // Yeni sayfa
+                        .requestMatchers("/api/cargos/tasks/**").authenticated() // Yeni API endpoint'i
                         // Diğer tüm /panel altındaki yollar en azından giriş yapmış olmayı gerektirsin
                         .requestMatchers("/panel/**").authenticated()
                         // ----------------------
