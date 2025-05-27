@@ -11,7 +11,6 @@ public interface CargoService {
 
     void cancelCargoProcess(String trackingNumber);
 
-    // Dönüş tipi TaskCompletionResponse olarak güncellendi
     TaskCompletionResponse completeUserTaskAndPrepareNextStep(String trackingNumber, String taskDefinitionKey, Map<String, Object> taskVariables);
 
     TrackingInfoResponse getTrackingInfo(String trackingNumber);

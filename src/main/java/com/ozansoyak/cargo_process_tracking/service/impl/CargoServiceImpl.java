@@ -353,7 +353,7 @@ public class CargoServiceImpl implements CargoService {
                 log.info("getTrackingInfo: PI_ID {} için süreç (runtime) aktif. Aktif görevler sorgulanıyor.", cargo.getProcessInstanceId());
             }
 
-            if (isCancellable && piRuntimeCheck != null) { // Sadece süreç aktifse görev ara
+            if (isCancellable && piRuntimeCheck != null) {
                 try {
                     List<Task> activeCamundaTasks = taskService.createTaskQuery()
                             .processInstanceId(cargo.getProcessInstanceId())
