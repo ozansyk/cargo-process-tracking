@@ -3,6 +3,7 @@ package com.ozansoyak.cargo_process_tracking.camundaworker;
 import com.ozansoyak.cargo_process_tracking.model.Cargo;
 import com.ozansoyak.cargo_process_tracking.model.enums.CargoStatus;
 import com.ozansoyak.cargo_process_tracking.repository.CargoRepository;
+import com.ozansoyak.cargo_process_tracking.service.EmailService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.camunda.bpm.engine.delegate.BpmnError;
@@ -15,6 +16,7 @@ import org.camunda.bpm.model.bpmn.instance.camunda.CamundaProperties;
 import org.camunda.bpm.model.bpmn.instance.camunda.CamundaProperty;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.StringUtils;
 
 import java.util.Collection; // Eklendi/Kontrol edildi
 import java.util.List;      // Eklendi/Kontrol edildi
@@ -26,6 +28,7 @@ import java.util.Optional;
 public class CargoStatusUpdateWorker implements JavaDelegate {
 
     private final CargoRepository cargoRepository;
+    private final EmailService emailService;
     private static final String TARGET_STATUS_PROPERTY_NAME = "targetStatus"; // Extension Property adı
 
     @Override
@@ -140,6 +143,16 @@ public class CargoStatusUpdateWorker implements JavaDelegate {
                 }
                 cargoRepository.save(cargo);
                 log.info("[{}] Kargo (ID: {}) durumu başarıyla {} olarak güncellendi.", executionId, finalCargoId, targetStatus);
+                if (StringUtils.hasText(cargo.getReceiverEmail())) {
+                    emailService.sendChangedCargoStatusToReceiver(
+                            cargo.getReceiverEmail(),
+                            cargo.getTrackingNumber(),
+                            targetStatus,
+                            cargo
+                    );
+                } else {
+                    log.warn("Kargo ID {} için alıcı e-posta adresi bulunamadığından durum güncelleme e-postası gönderilemedi.", cargo.getId());
+                }
             }
 
         } catch (BpmnError bpmnError) {
