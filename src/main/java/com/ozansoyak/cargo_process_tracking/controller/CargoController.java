@@ -115,16 +115,11 @@ public class CargoController {
         }
     }
 
-    // --- YENİ ENDPOINT: Belirli bir Task ID ile görev tamamlama ---
-    // Bu endpoint, paneldeki görev listesinden belirli bir görevi tamamlamak için daha uygundur.
-    @PutMapping("/tasks/{taskId}/complete") // Path'i /api/tasks/{taskId}/complete de yapabilirsiniz
+    @PutMapping("/tasks/{taskId}/complete") // VEYA @PostMapping
     public ResponseEntity<?> completeTaskById(@PathVariable String taskId) {
         log.info("PUT /api/cargos/tasks/{}/complete isteği alındı.", taskId);
         try {
             cargoService.completeTaskByIdAndPrepareNextStep(taskId);
-            // Başarı mesajı, hangi görevin tamamlandığını belirtebilir.
-            // Task task = taskService.createTaskQuery().taskId(taskId).singleResult(); // Artık yok
-            // String taskName = task != null ? task.getName() : taskId;
             return ResponseEntity.ok(Map.of("message", "Görev (ID: " + taskId + ") başarıyla tamamlandı."));
         } catch (EntityNotFoundException e) {
             log.warn("Görev tamamlanamadı (ID: {}), bulunamadı: {}", taskId, e.getMessage());

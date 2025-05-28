@@ -496,39 +496,56 @@ public class CargoServiceImpl implements CargoService {
         return new PageImpl<>(resultList, pageable, cargoPage.getTotalElements());
     }
 
-    // --- YENİ METOT: Aktif Kullanıcı Görevlerini Getir ---
     @Override
     @Transactional(readOnly = true)
     public List<ActiveTaskDto> getActiveUserTasks(String username, List<String> userGroups) {
-        TaskQuery query = taskService.createTaskQuery().active(); // Temel sorgu
+        TaskQuery query = taskService.createTaskQuery().active();
 
+        // Eğer username veya userGroups doluysa, onlara göre filtrele (kullanıcıya özel görevler)
+        // Eğer her ikisi de boş/null ise, hiçbir ek filtre uygulanmaz ve TÜM aktif görevler gelir.
         boolean hasUserCriteria = StringUtils.hasText(username);
         boolean hasGroupCriteria = !CollectionUtils.isEmpty(userGroups);
 
         if (hasUserCriteria && hasGroupCriteria) {
+            log.info("Aktif görevler kullanıcı '{}' VE grupları {} için sorgulanıyor.", username, userGroups);
             query.or()
                     .taskAssignee(username)
-                    .taskCandidateUser(username) // Kullanıcının aday olduğu görevler
+                    .taskCandidateUser(username)
                     .taskCandidateGroupIn(userGroups)
                     .endOr();
         } else if (hasUserCriteria) {
+            log.info("Aktif görevler SADECE kullanıcı '{}' için sorgulanıyor.", username);
             query.or()
                     .taskAssignee(username)
                     .taskCandidateUser(username)
                     .endOr();
         } else if (hasGroupCriteria) {
+            log.info("Aktif görevler SADECE grupları {} için sorgulanıyor.", userGroups);
             query.taskCandidateGroupIn(userGroups);
         } else {
-            // Hiçbir kriter yoksa (örn: anonim bir kullanıcı veya yetkisiz), boş liste dön
-            log.warn("getActiveUserTasks: Kullanıcı adı ve grup listesi boş. Aktif görev sorgulanamıyor.");
-            return List.of();
+            // username VE userGroups BOŞ/NULL ise, TÜM AKTİF GÖREVLER sorgulanır.
+            log.info("TÜM aktif kullanıcı görevleri sorgulanıyor (kullanıcı/grup filtresi yok).");
         }
 
         List<Task> tasks = query.orderByTaskCreateTime().desc().list();
-        log.info("Camunda sorgusu sonucu kullanıcı '{}', gruplar {} için {} aktif görev bulundu.", username, userGroups, tasks.size());
-        // ... (DTO'ya map etme kısmı devam eder) ...
-        // ... (Bir önceki cevaptaki tam implementasyonu kullanın)
-        Set<String> processDefinitionIds = tasks.stream().map(Task::getProcessDefinitionId).collect(Collectors.toSet());
+
+        if (tasks.isEmpty()) {
+            if (hasUserCriteria || hasGroupCriteria) {
+                log.info("Kullanıcı '{}', gruplar {} için Camunda'dan aktif görev bulunamadı.", username, userGroups);
+            } else {
+                log.info("Sistemde hiç aktif Camunda görevi bulunamadı.");
+            }
+            return List.of();
+        }
+
+        log.info("Camunda sorgusu sonucu {} aktif görev bulundu.", tasks.size());
+        // ... (DTO'ya map etme kısmı bir önceki cevaptaki gibi aynı kalacak)
+        // ... (ProcessDefinition ve ProcessInstance bilgilerini alma kısmı aynı)
+
+        Set<String> processDefinitionIds = tasks.stream()
+                .map(Task::getProcessDefinitionId)
+                .filter(Objects::nonNull) // Null ID'leri filtrele
+                .collect(Collectors.toSet());
         Map<String, ProcessDefinition> pdMap = new HashMap<>();
         if (!processDefinitionIds.isEmpty()) {
             List<ProcessDefinition> pds = repositoryService.createProcessDefinitionQuery()
@@ -543,23 +560,32 @@ public class CargoServiceImpl implements CargoService {
                     if (task.getProcessInstanceId() != null) {
                         List<ProcessInstance> instances = runtimeService.createProcessInstanceQuery()
                                 .processInstanceId(task.getProcessInstanceId())
-                                .list(); // .singleResult() yerine .list() kullanmak daha güvenli olabilir, ama aktif bir görev için tek PI olmalı.
+                                .list();
                         if (!instances.isEmpty()) {
                             pi = instances.get(0);
                         }
                     }
                     ProcessDefinition pd = pdMap.get(task.getProcessDefinitionId());
-                    String processDefinitionName = (pd != null && StringUtils.hasText(pd.getName())) ? pd.getName() : (pd != null ? pd.getKey() : "Bilinmeyen Süreç");
+                    String processDefinitionName = "Bilinmeyen Süreç";
+                    if (pd != null) {
+                        processDefinitionName = StringUtils.hasText(pd.getName()) ? pd.getName() : pd.getKey();
+                    } else if (task.getProcessDefinitionId() != null) {
+                        processDefinitionName = "Tanım ID: " + task.getProcessDefinitionId();
+                    }
 
                     String businessKeyFromPI = (pi != null) ? pi.getBusinessKey() : null;
-                    // Bazen task'ın kendisinde de businessKey olabilir (örn: CMMN case task'ları)
-                    // Eğer process instance'dan alınamazsa, task'tan gelen process business key'e bakılabilir.
-                    // Ancak BPMN user task'larında genellikle process instance'a bakılır.
 
-                    List<String> candidateGroupList = taskService.getIdentityLinksForTask(task.getId()).stream()
-                            .filter(link -> link.getGroupId() != null && "candidate".equals(link.getType()))
-                            .map(link -> link.getGroupId())
-                            .collect(Collectors.toList());
+                    List<String> candidateGroupList = Collections.emptyList(); // Başlangıçta boş
+                    try {
+                        candidateGroupList = taskService.getIdentityLinksForTask(task.getId()).stream()
+                                .filter(link -> link.getGroupId() != null && "candidate".equals(link.getType()))
+                                .map(link -> link.getGroupId())
+                                .collect(Collectors.toList());
+                    } catch (ProcessEngineException e) {
+                        log.warn("Task ID {} için IdentityLink alınırken hata: {}", task.getId(), e.getMessage());
+                        // Bu, görevin silinmiş olabileceği anlamına gelebilir, ancak listede hala varsa bu durum nadirdir.
+                    }
+
 
                     return ActiveTaskDto.builder()
                             .taskId(task.getId())
@@ -570,18 +596,17 @@ public class CargoServiceImpl implements CargoService {
                             .businessKey(businessKeyFromPI)
                             .createTime(task.getCreateTime() != null ? task.getCreateTime().toInstant().atZone(ZoneId.systemDefault()).toLocalDateTime() : null)
                             .assignee(task.getAssignee())
-                            .candidateGroups(candidateGroupList) // DTO'da List<String> ise direkt listeyi ver
+                            .candidateGroups(candidateGroupList)
                             .build();
                 })
                 .collect(Collectors.toList());
     }
 
-    // --- YENİ METOT: Task ID ile Görev Tamamlama ---
     @Override
     @Transactional
     public void completeTaskByIdAndPrepareNextStep(String taskId) {
-        log.info("Task ID '{}' ile görev tamamlama isteği.", taskId);
-        Task task = taskService.createTaskQuery().taskId(taskId).singleResult();
+        log.info("Task ID '{}' ile görev tamamlama isteği (genel).", taskId);
+        Task task = taskService.createTaskQuery().taskId(taskId).active().singleResult();
         if (task == null) {
             throw new EntityNotFoundException("Task ID '" + taskId + "' ile aktif görev bulunamadı.");
         }
@@ -589,63 +614,43 @@ public class CargoServiceImpl implements CargoService {
         String processInstanceId = task.getProcessInstanceId();
         String taskDefinitionKey = task.getTaskDefinitionKey();
         String processDefinitionId = task.getProcessDefinitionId();
-        log.info("Tamamlanacak görev: Task ID: {}, Task Key: {}, PI_ID: {}", taskId, taskDefinitionKey, processInstanceId);
+        String taskName = StringUtils.hasText(task.getName()) ? task.getName() : taskDefinitionKey;
 
-        // Süreç değişkeni ayarlama mantığı (completeUserTaskAndPrepareNextStep'teki gibi)
-        String variableNameToSet = null;
-        if (processDefinitionId != null) { // Sadece süreç görevleri için
-            try {
-                BpmnModelInstance modelInstance = repositoryService.getBpmnModelInstance(processDefinitionId);
-                if (modelInstance == null) throw new IllegalStateException("BPMN modeli bulunamadı: " + processDefinitionId);
+        log.info("Tamamlanacak genel görev: Task ID: {}, Adı: '{}', Task Key: {}, PI_ID: {}", taskId, taskName, taskDefinitionKey, processInstanceId);
 
-                org.camunda.bpm.model.bpmn.instance.FlowNode flowNodeElement = modelInstance.getModelElementById(taskDefinitionKey);
-                if (flowNodeElement instanceof UserTask) { // Sadece UserTask ise extension property ara
-                    UserTask userTaskElement = (UserTask) flowNodeElement;
-                    ExtensionElements extensionElements = userTaskElement.getExtensionElements();
-                    if (extensionElements != null) {
-                        List<CamundaProperties> propertiesList = extensionElements.getElementsQuery().filterByType(CamundaProperties.class).list();
-                        if (!propertiesList.isEmpty()) {
-                            CamundaProperties camundaProperties = propertiesList.get(0);
-                            Optional<CamundaProperty> nextStepProp = camundaProperties.getCamundaProperties().stream()
-                                    .filter(prop -> NEXT_STEP_VARIABLE_PROPERTY_NAME.equals(prop.getCamundaName())).findFirst();
-                            if (nextStepProp.isPresent() && StringUtils.hasText(nextStepProp.get().getCamundaValue())) {
-                                variableNameToSet = nextStepProp.get().getCamundaValue();
-                                log.info("BPMN'den sonraki adım değişkeni bulundu: '{}'", variableNameToSet);
-                            } else {
-                                log.info("Task Key '{}' için '{}' property değeri boş veya yok.", taskDefinitionKey, NEXT_STEP_VARIABLE_PROPERTY_NAME);
-                            }
-                        }
-                    }
-                } else {
-                    log.info("Aktif element ('{}') bir UserTask değil, nextStepVariable aranmayacak.", taskDefinitionKey);
-                }
-            } catch (Exception e) {
-                log.error("BPMN modelinden '{}' property okunurken hata (Task Key: {}): {}", NEXT_STEP_VARIABLE_PROPERTY_NAME, taskDefinitionKey, e.getMessage(), e);
-                throw new IllegalStateException("Süreç ilerleme değişkeni BPMN'den okunamadı: " + e.getMessage(), e);
+        // Süreç değişkeni ayarlama mantığı (BPMN'deki nextStepVariable için)
+        // Bu kısım, görevin bir süreçle ilişkili olup olmamasına ve nextStepVariable property'sine sahip olup olmamasına göre çalışır.
+        Map<String, Object> variablesToCompleteWith = new HashMap<>();
+        if (processDefinitionId != null) { // Sadece süreçle ilişkili görevler için
+            String nextStepVarNameFromBpmn = getNextStepVariableFromBpmn(processDefinitionId, taskDefinitionKey);
+            if (StringUtils.hasText(nextStepVarNameFromBpmn)) {
+                variablesToCompleteWith.put(nextStepVarNameFromBpmn, true);
+                log.info("Süreç (ID: {}) için '{}' değişkeni 'true' olarak görevle birlikte ayarlanacak.", processInstanceId, nextStepVarNameFromBpmn);
             }
-        }
-
-
-        if (variableNameToSet != null && processInstanceId != null) {
-            try {
-                runtimeService.setVariable(processInstanceId, variableNameToSet, true);
-                log.info("Süreç (ID: {}) için '{}' değişkeni 'true' yapıldı.", processInstanceId, variableNameToSet);
-            } catch (ProcessEngineException e) {
-                log.error("Süreç (ID: {}) ilerleme değişkeni ('{}') ayarlanırken hata: {}", processInstanceId, variableNameToSet, e.getMessage(), e);
-                throw new IllegalStateException("Camunda değişken ayarı hatası: " + e.getMessage(), e);
-            }
-        } else if (variableNameToSet != null) {
-            log.warn("Değişken ('{}') set edilemedi çünkü processInstanceId null (Task ID: {}).", variableNameToSet, taskId);
-        } else {
-            log.info("Görev ('{}') için ayarlanacak ilerleme değişkeni yok.", taskDefinitionKey);
         }
 
         try {
-            taskService.complete(taskId);
-            log.info("Görev (Task ID: {}) başarıyla tamamlandı.", taskId);
+            if (variablesToCompleteWith.isEmpty()) {
+                taskService.complete(taskId);
+            } else {
+                taskService.complete(taskId, variablesToCompleteWith);
+            }
+
+            // Eğer bu görev bir kargo süreciyle ilgiliyse ve businessKey'i varsa, kargo entity'sinin lastUpdatedAt'ını güncelle
+            if (processInstanceId != null) {
+                ProcessInstance pi = runtimeService.createProcessInstanceQuery().processInstanceId(processInstanceId).singleResult();
+                if (pi != null && StringUtils.hasText(pi.getBusinessKey())) {
+                    cargoRepository.findByTrackingNumber(pi.getBusinessKey()).ifPresent(cargo -> {
+                        cargo.setLastUpdatedAt(LocalDateTime.now());
+                        cargoRepository.save(cargo);
+                        log.info("Kargo (Takip No: {}) son güncellenme zamanı güncellendi, görev '{}' tamamlandı.", pi.getBusinessKey(), taskName);
+                    });
+                }
+            }
+            log.info("Görev (Task ID: {}, Adı: '{}') başarıyla tamamlandı.", taskId, taskName);
         } catch (ProcessEngineException e){
-            log.error("Görev (Task ID: {}) tamamlanırken Camunda hatası: {}", taskId, e.getMessage(), e);
-            throw new IllegalStateException("Görev (Task ID: " + taskId +") tamamlanamadı: " + e.getMessage(), e);
+            log.error("Görev (Task ID: {}, Adı: '{}') tamamlanırken Camunda hatası: {}", taskId, taskName, e.getMessage(), e);
+            throw new IllegalStateException("Görev (Task ID: " + taskId +", Adı: " + taskName + ") tamamlanamadı: " + e.getMessage(), e);
         }
     }
 

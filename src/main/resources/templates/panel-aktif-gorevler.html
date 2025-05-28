@@ -11,7 +11,6 @@
             .table-sm th, .table-sm td { padding: 0.5rem; vertical-align: middle; }
             .action-btn-group .btn { margin-right: 0.25rem; }
             .action-btn-group .btn:last-child { margin-right: 0; }
-            /* panel-sorgula.html'den stiller (eğer modal kullanılacaksa) */
             .modal-dialog-scrollable .modal-body { max-height: 75vh; overflow-y: auto; }
             #modalLoadingIndicator { padding: 3rem 0; }
             #modalContentArea p { margin-bottom: 0.5rem; }
@@ -95,55 +94,38 @@
     </div>
 </div>
 
-<!-- Kargo Detay Modalı için panel-sorgula.html'deki modalı buraya include ediyoruz -->
-<!-- Bu, panel-sorgula.html'de modalın bir ID'si (örn: id="cargoDetailModalContainer") olması ve
-     o ID ile sarmalanmış olması durumunda daha temiz çalışır.
-     Şimdilik direkt modalın kendisini replace ile alıyoruz. -->
 <div th:replace="~{panel-sorgula :: #detailUpdateModal}"></div>
 
 
 <th:block layout:fragment="pageScripts">
-    <!-- panel-sorgula.html'deki scriptleri buraya dahil etmemiz gerekiyor, çünkü openDetailModal vs. orada. -->
-    <!-- En iyi yol, bu JS fonksiyonlarını ortak bir .js dosyasına taşımak ve her iki sayfada da o dosyayı çağırmaktır. -->
-    <!-- Şimdilik, panel-sorgula.html'deki tüm script bloğunu buraya kopyalayalım ve bazılarını uyarlayalım. -->
+    <!-- panel-sorgula.html'deki scriptleri (veya ortak bir .js dosyasını) dahil etmelisiniz -->
+    <!-- Örnek: <script th:src="@{/js/panel-sorgula-scripts.js}"></script> -->
+    <!-- Şimdilik panel-sorgula.html'deki openDetailModal'ın global olduğunu varsayıyoruz -->
 
     <script th:inline="javascript">
-        // ---- panel-sorgula.html'den gelen scriptlerin bir kısmı ----
-        // Global Değişkenler (panel-sorgula'dan)
-        let currentTrackingNumberForModal = null; // Aktif görevler sayfası için ayrı bir değişken olabilir veya aynı kullanılabilir.
-        const PHYSICAL_RECEPTION_TASK_KEY_FROM_PANEL_SORGULA = /*[[${T(com.ozansoyak.cargo_process_tracking.service.impl.CargoServiceImpl).PHYSICAL_RECEPTION_TASK_KEY}]]*/ 'userTask_PhysicalReception_fallback';
-        const INVOICE_CREATION_TASK_KEY_FROM_PANEL_SORGULA = /*[[${T(com.ozansoyak.cargo_process_tracking.service.impl.CargoServiceImpl).INVOICE_CREATION_TASK_KEY}]]*/ 'userTask_InvoiceCreation_fallback';
-
-        // Modal Elementleri (panel-sorgula'dan)
-        const detailModalElement_tasksPage = document.getElementById('detailUpdateModal'); // Bu sayfadaki modal için ID aynı olmalı
-        const detailModal_tasksPage = detailModalElement_tasksPage ? new bootstrap.Modal(detailModalElement_tasksPage) : null;
-        const modalLoading_tasksPage = document.getElementById('modalLoadingIndicator');
-        const modalError_tasksPage = document.getElementById('modalErrorArea');
-        // ... (panel-sorgula.html'deki diğer modal element const'ları buraya eklenebilir veya
-        //      bu scriptler ortak bir dosyaya taşınırsa oradan erişilir)
-
-        // Eğer openDetailModal panel-sorgula.html'de window'a atanmışsa direkt çağırabiliriz.
+        // Kargo Detay Modalını Açmak için (panel-sorgula.js'deki openDetailModal'ı çağırır)
         window.openCargoDetailModalFromTasksPage = function(trackingNumber) {
             if (typeof window.openDetailModal === 'function') {
-                window.openDetailModal(trackingNumber);
+                window.openDetailModal(trackingNumber); // panel-sorgula.html'deki global fonksiyonu çağır
             } else {
-                console.error("'openDetailModal' fonksiyonu bulunamadı. panel-sorgula.html'deki scriptlerin yüklendiğinden emin olun.");
-                alert("Kargo detayları görüntülenemiyor. Lütfen kargo sorgulama sayfasını kontrol edin.");
+                console.error("'openDetailModal' fonksiyonu bulunamadı. Ortak scriptlerin yüklendiğinden emin olun.");
+                alert("Kargo detayları görüntülenemiyor.");
             }
         };
-        // ---- panel-sorgula.html'den scriptlerin sonu ----
 
-
-        // ---- Bu sayfaya özel scriptler ----
         const taskUpdateResultDivMyTasks = document.getElementById('taskUpdateResult');
 
         window.handleGenericTaskCompletion = function(buttonElement) {
             const taskId = buttonElement.getAttribute('data-task-id');
             const taskName = buttonElement.getAttribute('data-task-name');
-            const taskDefinitionKey = buttonElement.getAttribute('data-task-def-key');
-            const businessKey = buttonElement.getAttribute('data-business-key');
+            // const taskDefinitionKey = buttonElement.getAttribute('data-task-def-key'); // Alınıyor ama henüz kullanılmıyor
+            // const businessKey = buttonElement.getAttribute('data-business-key'); // Alınıyor ama henüz kullanılmıyor
 
-            if (!taskId) return;
+            if (!taskId) {
+                console.error("Task ID bulunamadı!");
+                return;
+            }
+
             const taskNameToConfirm = taskName || taskId;
             if (!confirm(`'${taskNameToConfirm}' adlı görevi tamamlamak istediğinizden emin misiniz?`)) {
                 return;
@@ -155,72 +137,45 @@
             buttonElement.disabled = true;
 
             const headers = { 'Content-Type': 'application/json' };
-            // CSRF token ekleme (eğer CSRF aktifse ve panel-sorgula'daki gibi global değişkenler varsa)
-            // if (typeof csrfToken !== 'undefined' && typeof csrfHeaderName !== 'undefined' && csrfToken && csrfHeaderName) {
-            //     headers[csrfHeaderName] = csrfToken;
-            // }
+            // CSRF Token (Eğer Spring Security CSRF aktifse ve globalde tanımlıysa)
+            // if (typeof csrfToken !== 'undefined' && csrfToken) { headers[csrfHeaderName] = csrfToken; }
 
-            let fetchUrl;
-            let requestBody = null;
-            let httpMethod = 'PUT'; // Genellikle görev tamamlama PUT veya POST olur
 
-            // Kargo süreciyle ilgili özel görevler için kargo detay modalını açabiliriz
-            const processNameElement = buttonElement.closest('tr').querySelector('td:nth-child(3)');
-            const processName = processNameElement ? processNameElement.textContent.toLowerCase() : '';
-
-            if (businessKey && taskDefinitionKey && processName.includes('kargo')) {
-                // Eğer fatura oluşturma ise veya özel input gerektiren başka bir kargo göreviyse,
-                // kullanıcıyı kargo detay modalına yönlendirmek daha iyi olabilir.
-                if (taskDefinitionKey === INVOICE_CREATION_TASK_KEY_FROM_PANEL_SORGULA || taskDefinitionKey === PHYSICAL_RECEPTION_TASK_KEY_FROM_PANEL_SORGULA) {
-                    if (window.openCargoDetailModalFromTasksPage) {
-                        alert("Bu görev için lütfen kargo detay sayfasındaki ilgili adımı kullanın.");
-                        window.openCargoDetailModalFromTasksPage(businessKey);
-                        if(taskUpdateResultDivMyTasks) taskUpdateResultDivMyTasks.innerHTML = ""; // Mesajı temizle
-                        buttonElement.disabled = false; // Butonu tekrar aktif et
-                        return;
-                    }
-                }
-                // Input gerektirmeyen diğer kargo görevleri için (eğer varsa)
-                fetchUrl = `/api/cargos/${businessKey}/complete-step/${taskDefinitionKey}`;
-            } else {
-                // Diğer genel süreçler için (bu projede sadece kargo var gibi görünüyor)
-                // Eğer genel bir görev tamamlama API'niz varsa onu kullanın.
-                // Örnek: Camunda'nın kendi REST API'si: POST /task/{id}/complete (Authentication gerekir)
-                // Şimdilik varsayımsal bir endpoint
-                console.warn(`Genel görev tamamlama için endpoint tanımlanmadı: ${taskDefinitionKey}`);
-                if(taskUpdateResultDivMyTasks) {
-                    taskUpdateResultDivMyTasks.innerHTML = `<div class="alert alert-warning py-2">'${taskNameToConfirm}' görevi için otomatik tamamlama bu ekrandan desteklenmiyor. Lütfen Camunda Tasklist'i kullanın.</div>`;
-                }
-                buttonElement.disabled = false;
-                return;
-            }
+            // GENEL GÖREV TAMAMLAMA ENDPOINT'İ (Backend'de oluşturulmalı)
+            // Bu endpoint sadece taskId alıp görevi tamamlamalıdır.
+            // Gerekirse, BPMN'deki 'nextStepVariable' gibi standart değişkenleri ayarlayabilir.
+            const fetchUrl = `/api/cargos/tasks/${taskId}/complete`; // Bu endpoint'in var olduğundan emin olun
+            let httpMethod = 'PUT'; // Veya POST
 
             fetch(fetchUrl, {
                 method: httpMethod,
-                headers: headers,
-                body: requestBody ? JSON.stringify(requestBody) : null
+                headers: headers
+                // Şimdilik body yok, çünkü ek input sormuyoruz.
             })
-                .then(response => { // handleFetchResponse'u burada da kullanabiliriz
+                .then(response => {
                     if (!response.ok) {
                         return response.json().catch(() => response.text())
                             .then(errDataOrText => {
                                 let errorMessage = `İstek başarısız: ${response.status}`;
-                                if (typeof errDataOrText === 'object' && errDataOrText.message) errorMessage = errDataOrText.message;
-                                else if (typeof errDataOrText === 'string' && errDataOrText.trim() !== '') errorMessage = errDataOrText;
+                                if (typeof errDataOrText === 'object' && errDataOrText.message) {
+                                    errorMessage = errDataOrText.message;
+                                } else if (typeof errDataOrText === 'string' && errDataOrText.trim() !== '') {
+                                    errorMessage = errDataOrText;
+                                }
                                 throw new Error(errorMessage);
                             });
                     }
-                    return response.json().catch(() => { return { message: 'Görev başarıyla tamamlandı!'}; });
+                    return response.json().catch(() => { return { message: `'${taskNameToConfirm}' görevi başarıyla tamamlandı!`}; });
                 })
                 .then(data => {
-                    let message = (data && data.message) ? data.message : 'Görev başarıyla tamamlandı!';
+                    let message = (data && data.message) ? data.message : `'${taskNameToConfirm}' görevi başarıyla tamamlandı!`;
                     if(taskUpdateResultDivMyTasks) {
                         taskUpdateResultDivMyTasks.innerHTML = `<div class="alert alert-success py-2">${message} Sayfa yenileniyor...</div>`;
                     }
                     setTimeout(() => { window.location.reload(); }, 1500);
                 })
                 .catch(error => {
-                    console.error("Görev tamamlama hatası:", error);
+                    console.error("Görev tamamlama hatası (ID: " + taskId + "):", error);
                     if(taskUpdateResultDivMyTasks) {
                         taskUpdateResultDivMyTasks.innerHTML = `<div class="alert alert-danger py-2">Hata: ${error.message}</div>`;
                     }

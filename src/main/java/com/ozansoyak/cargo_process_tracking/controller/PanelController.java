@@ -10,6 +10,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
@@ -141,51 +142,19 @@ public class PanelController {
     }
 
     @GetMapping("/aktif-gorevler")
+    @PreAuthorize("hasRole('ADMIN')") // SADECE ADMIN TÜM GÖREVLERİ GÖRSÜN
     public String showActiveTasksPage(Model model, Authentication authentication) {
-        addCommonPanelAttributes(model, authentication, "aktifGorevler"); // activeMenuItem güncellendi
+        addCommonPanelAttributes(model, authentication, "aktifGorevler");
 
-        String username = null;
-        List<String> userGroups = new ArrayList<>();
-
-        if (authentication != null && authentication.getPrincipal() instanceof UserDetails userDetails) {
-            username = userDetails.getUsername();
-            userGroups = userDetails.getAuthorities().stream()
-                    .map(GrantedAuthority::getAuthority)
-                    // ÖNEMLİ: Camunda'daki grup adlarınızla Spring Security rolleriniz arasındaki
-                    // eşleşmeyi burada doğru bir şekilde yapın.
-                    .map(role -> {
-                        if ("ROLE_ADMIN".equals(role)) return "camunda-admin"; // Camunda'nın varsayılan admin grubu
-                        if ("ROLE_KARGO_CALISANLARI".equals(role)) return "kargo-calisanlari"; // Örnek grup
-                        if ("ROLE_MUHASEBE_EKIBI".equals(role)) return "muhasebe-ekibi";   // Örnek grup
-                        // Genel bir kural olarak, "ROLE_" prefix'ini kaldırıp küçük harfe çevirebilirsiniz,
-                        // ama Camunda'daki grup adlarınızla tam eşleşmeli.
-                        return role.startsWith("ROLE_") ? role.substring(5).toLowerCase() : role.toLowerCase();
-                    })
-                    .filter(groupName -> !groupName.isEmpty()) // Boş grup adlarını filtrele
-                    .collect(Collectors.toList());
-            log.info("Aktif görevler sorgulanıyor. Kullanıcı: '{}', Elde edilen Camunda grupları: {}", username, userGroups);
-        } else {
-            log.warn("Aktif görevler için kimlik doğrulanmış kullanıcı bulunamadı. Görev listesi boş olacak.");
-            model.addAttribute("activeTasks", List.of());
-            model.addAttribute("errorMessage", "Aktif görevleri listelemek için giriş yapmalısınız veya yetkiniz bulunmamaktadır.");
-            return "panel-aktif-gorevler";
-        }
-
-        // Eğer username null değilse (giriş yapmış bir kullanıcı varsa) görevleri sorgula
-        List<ActiveTaskDto> activeTasks = new ArrayList<>();
-        if (username != null) {
-            activeTasks = cargoService.getActiveUserTasks(username, userGroups);
-        } else if (!userGroups.isEmpty()) { // Sadece grup bazlı sorgulama (kullanıcı null ama grupları varsa - pek olası değil)
-            activeTasks = cargoService.getActiveUserTasks(null, userGroups);
-        }
-
-
+        // Tüm aktif görevleri getirmek için username ve userGroups'u null veya boş gönderiyoruz.
+        // CargoServiceImpl'deki getActiveUserTasks metodu bu durumu ele alacak şekilde güncellendi.
+        List<ActiveTaskDto> activeTasks = cargoService.getActiveUserTasks(null, Collections.emptyList());
         model.addAttribute("activeTasks", activeTasks);
 
         if (activeTasks.isEmpty()) {
-            log.info("Kullanıcı '{}' veya grupları {} için gösterilecek aktif Camunda görevi bulunamadı.", username, userGroups);
+            log.info("Sistemde gösterilecek aktif Camunda görevi bulunamadı (Tüm görevler sorgulandı).");
         } else {
-            log.info("{} adet aktif Camunda görevi bulundu ve modele eklendi.", activeTasks.size());
+            log.info("{} adet aktif Camunda görevi bulundu ve modele eklendi (Tüm görevler sorgulandı).", activeTasks.size());
         }
         return "panel-aktif-gorevler";
     }
