@@ -8,17 +8,22 @@
     <title layout:fragment="title">Aktif Görevlerim</title>
     <th:block layout:fragment="pageStyles">
         <style>
-            /* Bu sayfaya özel stiller, gerekirse */
-            .table-sm th, .table-sm td {
-                padding: 0.5rem; /* main-layout'taki 0.4rem'i ezebiliriz */
-                vertical-align: middle;
-            }
-            .action-btn-group .btn {
-                margin-right: 0.25rem; /* Butonlar arası küçük boşluk */
-            }
-            .action-btn-group .btn:last-child {
-                margin-right: 0;
-            }
+            .table-sm th, .table-sm td { padding: 0.5rem; vertical-align: middle; }
+            .action-btn-group .btn { margin-right: 0.25rem; }
+            .action-btn-group .btn:last-child { margin-right: 0; }
+            /* panel-sorgula.html'den stiller (eğer modal kullanılacaksa) */
+            .modal-dialog-scrollable .modal-body { max-height: 75vh; overflow-y: auto; }
+            #modalLoadingIndicator { padding: 3rem 0; }
+            #modalContentArea p { margin-bottom: 0.5rem; }
+            #modalContentArea h5 { margin-top: 1rem; margin-bottom: 0.3rem; font-size: 1rem; color: #495057; font-weight: 500;}
+            #modalContentArea h5:first-of-type { margin-top: 0; }
+            .btn .spinner-border-sm { display: none; }
+            .btn .icon-idle { display: inline-block; vertical-align: middle; }
+            .btn.loading .spinner-border-sm { display: inline-block; vertical-align: middle;}
+            .btn.loading .icon-idle { display: none; }
+            .btn.loading .button-text { margin-left: 0.3rem; vertical-align: middle;}
+            #invoiceEntryForm { border: 1px solid #dee2e6; border-radius: 0.375rem; }
+            #invoiceEntryForm .form-label-sm { font-size: 0.875em; margin-bottom: 0.25rem; }
         </style>
     </th:block>
 </head>
@@ -28,15 +33,12 @@
     <h2 class="mb-4 border-bottom pb-2">Aktif Görevlerim</h2>
 
     <div id="taskUpdateResult" class="mb-3">
-        <!-- AJAX ile görev tamamlama sonrası mesajlar buraya gelecek -->
         <div th:if="${successMessage}" class="alert alert-success alert-dismissible fade show" role="alert">
-            <i class="bi bi-check-circle-fill me-2"></i>
-            <span th:text="${successMessage}"></span>
+            <i class="bi bi-check-circle-fill me-2"></i> <span th:text="${successMessage}"></span>
             <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
         </div>
         <div th:if="${errorMessage}" class="alert alert-danger alert-dismissible fade show" role="alert">
-            <i class="bi bi-exclamation-triangle-fill me-2"></i>
-            <span th:text="${errorMessage}"></span>
+            <i class="bi bi-exclamation-triangle-fill me-2"></i> <span th:text="${errorMessage}"></span>
             <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
         </div>
     </div>
@@ -50,41 +52,42 @@
             <thead class="table-light">
             <tr>
                 <th>Görev Adı</th>
-                <th>Takip No / İş Anahtarı</th>
+                <th>İş Anahtarı (Takip No)</th>
                 <th>Süreç Adı</th>
-                <th>Oluşturulma Zamanı</th>
-                <th>Atanan Kişi/Grup</th>
+                <th>Oluşturulma</th>
+                <th>Atanan/Grup</th>
                 <th class="text-center">Aksiyon</th>
             </tr>
             </thead>
             <tbody>
-            <tr th:each="task : ${activeTasks}"> <!-- Controller'dan gelen activeTasks listesi -->
+            <tr th:each="task : ${activeTasks}">
                 <td th:text="${task.taskName ?: task.taskDefinitionKey}">Görev Adı</td>
                 <td>
-                    <!-- Eğer bu kargo süreciyse ve businessKey varsa, sorgulama sayfasına link ver -->
-                    <a th:if="${task.businessKey != null and task.processDefinitionName != null and #strings.containsIgnoreCase(task.processDefinitionName, 'Kargo')}"
-                       th:href="@{/panel/sorgula(trackingNo=${task.businessKey})}"
-                       th:text="${task.businessKey}"
-                       title="Kargo Detaylarını Görüntüle"></a>
-                    <span th:unless="${task.businessKey != null and task.processDefinitionName != null and #strings.containsIgnoreCase(task.processDefinitionName, 'Kargo')}"
-                          th:text="${task.businessKey ?: '-'}"></span>
+                    <th:block th:with="isCargoProcess=${task.processDefinitionName != null and #strings.containsIgnoreCase(task.processDefinitionName, 'Kargo')}">
+                        <a th:if="${task.businessKey != null and isCargoProcess}"
+                           href="javascript:void(0);"
+                           th:attr="onclick='window.openCargoDetailModalFromTasksPage(\'' + ${task.businessKey} + '\')'"
+                           th:text="${task.businessKey}"
+                           title="Kargo Detaylarını Görüntüle"></a>
+                        <span th:unless="${task.businessKey != null and isCargoProcess}"
+                              th:text="${task.businessKey ?: '-'}"></span>
+                    </th:block>
                 </td>
                 <td th:text="${task.processDefinitionName ?: 'Bilinmiyor'}">Süreç Adı</td>
-                <td th:text="${task.createTime != null ? #temporals.format(task.createTime, 'dd.MM.yyyy HH:mm') : '-'}">Tarih</td>
-                <td th:text="${task.assignee ?: (task.candidateGroups != null and not #lists.isEmpty(task.candidateGroups) ? #strings.listJoin(task.candidateGroups, ', ') : 'Havuz Görevi')}">Atanan</td>
+                <td th:text="${task.createTime != null ? #temporals.format(task.createTime, 'dd.MM.yy HH:mm') : '-'}">Tarih</td>
+                <td th:text="${task.assignee ?: (#lists.isEmpty(task.candidateGroups) ? 'Havuzda' : #strings.listJoin(task.candidateGroups, ', '))}">Atanan</td>
                 <td class="text-center">
-                    <!-- DİKKAT: onclick fonksiyonuna window. ekledik -->
                     <button type="button" class="btn btn-sm btn-success"
-                            th:attr="data-task-id=${task.taskId}, data-task-name=${task.taskName ?: task.taskDefinitionKey}"
-                            onclick="window.completeGenericTask(this.getAttribute('data-task-id'), this.getAttribute('data-task-name'))">
+                            th:attr="data-task-id=${task.taskId},
+                                     data-task-name=${task.taskName ?: task.taskDefinitionKey},
+                                     data-task-def-key=${task.taskDefinitionKey},
+                                     data-business-key=${task.businessKey}"
+                            onclick="window.handleGenericTaskCompletion(this)">
                         <i class="bi bi-check-lg"></i> Tamamla
                     </button>
-                    <!-- TODO: Göreve gitmek için bir link/buton (örn: Camunda Tasklist veya özel bir form) eklenebilir -->
-                    <!--
-                    <a th:href="@{'/camunda/app/tasklist/default/#/task/' + ${task.taskId}}" target="_blank" class="btn btn-sm btn-outline-primary" title="Camunda Tasklist'te Aç">
+                    <a th:href="@{'/camunda/app/tasklist/default/#/task/' + ${task.taskId}}" target="_blank" class="btn btn-sm btn-outline-info ms-1" title="Camunda Tasklist'te Aç">
                         <i class="bi bi-box-arrow-up-right"></i>
                     </a>
-                    -->
                 </td>
             </tr>
             </tbody>
@@ -92,107 +95,136 @@
     </div>
 </div>
 
-<th:block layout:fragment="pageScripts">
-    <script th:inline="javascript">
-        const taskUpdateResultDiv = document.getElementById('taskUpdateResult');
-        const csrfToken = /*[[${_csrf != null ? _csrf.token : null}]]*/ null; // CSRF token (gerekirse)
-        const csrfHeaderName = /*[[${_csrf != null ? _csrf.headerName : null}]]*/ null; // CSRF başlık adı
+<!-- Kargo Detay Modalı için panel-sorgula.html'deki modalı buraya include ediyoruz -->
+<!-- Bu, panel-sorgula.html'de modalın bir ID'si (örn: id="cargoDetailModalContainer") olması ve
+     o ID ile sarmalanmış olması durumunda daha temiz çalışır.
+     Şimdilik direkt modalın kendisini replace ile alıyoruz. -->
+<div th:replace="~{panel-sorgula :: #detailUpdateModal}"></div>
 
-        // Fonksiyonu window nesnesine atayarak global yapalım
-        window.completeGenericTask = function(taskId, taskName) {
+
+<th:block layout:fragment="pageScripts">
+    <!-- panel-sorgula.html'deki scriptleri buraya dahil etmemiz gerekiyor, çünkü openDetailModal vs. orada. -->
+    <!-- En iyi yol, bu JS fonksiyonlarını ortak bir .js dosyasına taşımak ve her iki sayfada da o dosyayı çağırmaktır. -->
+    <!-- Şimdilik, panel-sorgula.html'deki tüm script bloğunu buraya kopyalayalım ve bazılarını uyarlayalım. -->
+
+    <script th:inline="javascript">
+        // ---- panel-sorgula.html'den gelen scriptlerin bir kısmı ----
+        // Global Değişkenler (panel-sorgula'dan)
+        let currentTrackingNumberForModal = null; // Aktif görevler sayfası için ayrı bir değişken olabilir veya aynı kullanılabilir.
+        const PHYSICAL_RECEPTION_TASK_KEY_FROM_PANEL_SORGULA = /*[[${T(com.ozansoyak.cargo_process_tracking.service.impl.CargoServiceImpl).PHYSICAL_RECEPTION_TASK_KEY}]]*/ 'userTask_PhysicalReception_fallback';
+        const INVOICE_CREATION_TASK_KEY_FROM_PANEL_SORGULA = /*[[${T(com.ozansoyak.cargo_process_tracking.service.impl.CargoServiceImpl).INVOICE_CREATION_TASK_KEY}]]*/ 'userTask_InvoiceCreation_fallback';
+
+        // Modal Elementleri (panel-sorgula'dan)
+        const detailModalElement_tasksPage = document.getElementById('detailUpdateModal'); // Bu sayfadaki modal için ID aynı olmalı
+        const detailModal_tasksPage = detailModalElement_tasksPage ? new bootstrap.Modal(detailModalElement_tasksPage) : null;
+        const modalLoading_tasksPage = document.getElementById('modalLoadingIndicator');
+        const modalError_tasksPage = document.getElementById('modalErrorArea');
+        // ... (panel-sorgula.html'deki diğer modal element const'ları buraya eklenebilir veya
+        //      bu scriptler ortak bir dosyaya taşınırsa oradan erişilir)
+
+        // Eğer openDetailModal panel-sorgula.html'de window'a atanmışsa direkt çağırabiliriz.
+        window.openCargoDetailModalFromTasksPage = function(trackingNumber) {
+            if (typeof window.openDetailModal === 'function') {
+                window.openDetailModal(trackingNumber);
+            } else {
+                console.error("'openDetailModal' fonksiyonu bulunamadı. panel-sorgula.html'deki scriptlerin yüklendiğinden emin olun.");
+                alert("Kargo detayları görüntülenemiyor. Lütfen kargo sorgulama sayfasını kontrol edin.");
+            }
+        };
+        // ---- panel-sorgula.html'den scriptlerin sonu ----
+
+
+        // ---- Bu sayfaya özel scriptler ----
+        const taskUpdateResultDivMyTasks = document.getElementById('taskUpdateResult');
+
+        window.handleGenericTaskCompletion = function(buttonElement) {
+            const taskId = buttonElement.getAttribute('data-task-id');
+            const taskName = buttonElement.getAttribute('data-task-name');
+            const taskDefinitionKey = buttonElement.getAttribute('data-task-def-key');
+            const businessKey = buttonElement.getAttribute('data-business-key');
+
             if (!taskId) return;
             const taskNameToConfirm = taskName || taskId;
-            if (!confirm(`'${taskNameToConfirm}' görevini tamamlamak istediğinizden emin misiniz?`)) {
+            if (!confirm(`'${taskNameToConfirm}' adlı görevi tamamlamak istediğinizden emin misiniz?`)) {
                 return;
             }
 
-            if(taskUpdateResultDiv) {
-                taskUpdateResultDiv.innerHTML = '<div class="alert alert-info py-2">İşleniyor... <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span></div>';
+            if(taskUpdateResultDivMyTasks) {
+                taskUpdateResultDivMyTasks.innerHTML = '<div class="alert alert-info py-2">İşleniyor... <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span></div>';
             }
-            const buttonElement = document.querySelector(`button[data-task-id="${taskId}"]`);
-            if(buttonElement) buttonElement.disabled = true;
+            buttonElement.disabled = true;
 
-            const headers = {
-                'Content-Type': 'application/json'
-            };
-            if (csrfToken && csrfHeaderName) {
-                headers[csrfHeaderName] = csrfToken;
-            }
+            const headers = { 'Content-Type': 'application/json' };
+            // CSRF token ekleme (eğer CSRF aktifse ve panel-sorgula'daki gibi global değişkenler varsa)
+            // if (typeof csrfToken !== 'undefined' && typeof csrfHeaderName !== 'undefined' && csrfToken && csrfHeaderName) {
+            //     headers[csrfHeaderName] = csrfToken;
+            // }
 
-            // GENEL BİR GÖREV TAMAMLAMA ENDPOINT'İ KULLANILDIĞINI VARSAYIYORUZ
-            // Bu endpoint, taskId alır ve görevi tamamlar. Eğer görev kargo süreciyle ilgiliyse
-            // ve özel değişkenler gerekiyorsa (panel-sorgula'daki gibi), bu sayfa o tür görevleri
-            // direkt tamamlamak için uygun olmayabilir. Bu sayfa daha çok genel, inputsuz görevler için.
-            // Veya her görev tipi için farklı bir modal/form açılabilir.
-            // Şimdilik basit bir PUT isteği varsayıyoruz.
-            // Sizin için doğru endpoint: /api/cargos/{trackingNumber}/complete-step/{taskDefinitionKey} idi.
-            // Bu sayfada trackingNumber ve taskDefinitionKey bilgisine ihtiyacımız var.
-            // Bu bilgiler `task` objesinden (eğer controller'da TaskDetailDto'ya eklerseniz) alınabilir.
-            // Şimdilik genel bir /api/tasks/{taskId}/complete endpoint'i varsayalım.
-            // YA DA: Bu sayfadaki "Tamamla" butonu, kargo görevleri için panel-sorgula modalını açabilir.
-            // Biz şimdilik basit bir tamamlama varsayalım.
-            // Eğer bu görevler Kargo sürecine aitse ve takip no (businessKey) ve taskDefinitionKey varsa, panel-sorgula'daki API'yi kullanabiliriz.
-            // Bu durumda controller'dan gelen `task` objesinin businessKey ve taskDefinitionKey alanlarını içermesi gerekir.
-
-            // ÖRNEK: Eğer kargo süreciyse ve bilgiler varsa panel-sorgula API'sini kullanalım
-            const taskRow = buttonElement.closest('tr');
-            const businessKeyElement = taskRow.querySelector('td:nth-child(2) a, td:nth-child(2) span'); // Takip No/Business Key olan hücre
-            const businessKey = businessKeyElement ? businessKeyElement.textContent.trim() : null;
-            const taskDefKey = taskName === taskId ? taskId : buttonElement.getAttribute('data-task-name'); // Bu taskName, aslında taskDefinitionKey olmalıydı.
-                                                                                                            // Ya da controller'dan task.taskDefinitionKey gelmeli.
-                                                                                                            // Şimdilik taskName'i taskDefinitionKey olarak varsayalım (hatalı olabilir)
-
-            let fetchUrl = `/api/generic-tasks/${taskId}/complete`; // Varsayılan genel endpoint
+            let fetchUrl;
             let requestBody = null;
+            let httpMethod = 'PUT'; // Genellikle görev tamamlama PUT veya POST olur
 
-            // Modelinizdeki `activeTasks` listesindeki her bir task objesi `taskDefinitionKey` ve `businessKey` alanlarını içeriyorsa:
-            // const taskDefinitionKeyFromData = buttonElement.parentElement.parentElement.querySelector('td:nth-child(1)').textContent; // Bu güvenilir değil
-            // Güvenli yol: th:attr ile taskDefinitionKey'i de butona eklemek
-            // th:attr="data-task-id=${task.taskId}, data-task-name=${task.taskName}, data-task-def-key=${task.taskDefinitionKey}, data-business-key=${task.businessKey}"
-            // const taskDefinitionKey = buttonElement.getAttribute('data-task-def-key');
-            // const businessKeyForApi = buttonElement.getAttribute('data-business-key');
+            // Kargo süreciyle ilgili özel görevler için kargo detay modalını açabiliriz
+            const processNameElement = buttonElement.closest('tr').querySelector('td:nth-child(3)');
+            const processName = processNameElement ? processNameElement.textContent.toLowerCase() : '';
 
-            // Şimdilik basit bir task tamamlama (Camunda Tasklist gibi)
-            // Eğer bu görevler sizin Kargo süreciyle ilgiliyse, /api/cargos/{trackingNumber}/complete-step/{taskDefinitionKey} kullanılmalı.
-            // Bu durumda bu sayfaya gelen `activeTasks` listesindeki her bir task objesi `trackingNumber` (businessKey) ve `taskDefinitionKey` içermeli.
-            // Controller'da ActiveTaskDto'nuzu bu bilgileri içerecek şekilde güncelleyin.
-
-            // Varsayım: Controller'dan gelen "task" objesi şunları içeriyor: taskId, taskName, businessKey, taskDefinitionKey
-            // Bu scriptte task.businessKey ve task.taskDefinitionKey'i kullanmak için butona data attribute olarak eklememiz gerekirdi.
-            // Şimdilik fetchUrl'i placeholder olarak bırakıyorum. GERÇEK ENDPOINT'İNİZİ KULLANMALISINIZ.
-            // Eğer bu görevlerin hepsi kargo süreciyle ilgiliyse ve panel-sorgula'daki gibi tamamlanacaksa:
-            // fetchUrl = `/api/cargos/${businessKey}/complete-step/${taskDefinitionKey}`;
-
-
-            // BASİT GENEL TASK TAMAMLAMA ÖRNEĞİ (Sadece taskId ile)
-            // GERÇEK PROJENİZDE BU ENDPOINT'İN OLMASI GEREKİR VEYA
-            // KARGOYA ÖZEL ENDPOINT KULLANILMALIDIR.
-            fetchUrl = `/api/tasks/${taskId}/complete`; // BU ENDPOINT'İN SİZDE OLMASI LAZIM
+            if (businessKey && taskDefinitionKey && processName.includes('kargo')) {
+                // Eğer fatura oluşturma ise veya özel input gerektiren başka bir kargo göreviyse,
+                // kullanıcıyı kargo detay modalına yönlendirmek daha iyi olabilir.
+                if (taskDefinitionKey === INVOICE_CREATION_TASK_KEY_FROM_PANEL_SORGULA || taskDefinitionKey === PHYSICAL_RECEPTION_TASK_KEY_FROM_PANEL_SORGULA) {
+                    if (window.openCargoDetailModalFromTasksPage) {
+                        alert("Bu görev için lütfen kargo detay sayfasındaki ilgili adımı kullanın.");
+                        window.openCargoDetailModalFromTasksPage(businessKey);
+                        if(taskUpdateResultDivMyTasks) taskUpdateResultDivMyTasks.innerHTML = ""; // Mesajı temizle
+                        buttonElement.disabled = false; // Butonu tekrar aktif et
+                        return;
+                    }
+                }
+                // Input gerektirmeyen diğer kargo görevleri için (eğer varsa)
+                fetchUrl = `/api/cargos/${businessKey}/complete-step/${taskDefinitionKey}`;
+            } else {
+                // Diğer genel süreçler için (bu projede sadece kargo var gibi görünüyor)
+                // Eğer genel bir görev tamamlama API'niz varsa onu kullanın.
+                // Örnek: Camunda'nın kendi REST API'si: POST /task/{id}/complete (Authentication gerekir)
+                // Şimdilik varsayımsal bir endpoint
+                console.warn(`Genel görev tamamlama için endpoint tanımlanmadı: ${taskDefinitionKey}`);
+                if(taskUpdateResultDivMyTasks) {
+                    taskUpdateResultDivMyTasks.innerHTML = `<div class="alert alert-warning py-2">'${taskNameToConfirm}' görevi için otomatik tamamlama bu ekrandan desteklenmiyor. Lütfen Camunda Tasklist'i kullanın.</div>`;
+                }
+                buttonElement.disabled = false;
+                return;
+            }
 
             fetch(fetchUrl, {
-                method: 'PUT',
-                headers: headers
-                // body: JSON.stringify(requestBody) // Eğer body gerekiyorsa
+                method: httpMethod,
+                headers: headers,
+                body: requestBody ? JSON.stringify(requestBody) : null
             })
-                .then(response => {
+                .then(response => { // handleFetchResponse'u burada da kullanabiliriz
                     if (!response.ok) {
-                        return response.json().then(err => { throw new Error(err.message || `Sunucu hatası: ${response.status}`) });
+                        return response.json().catch(() => response.text())
+                            .then(errDataOrText => {
+                                let errorMessage = `İstek başarısız: ${response.status}`;
+                                if (typeof errDataOrText === 'object' && errDataOrText.message) errorMessage = errDataOrText.message;
+                                else if (typeof errDataOrText === 'string' && errDataOrText.trim() !== '') errorMessage = errDataOrText;
+                                throw new Error(errorMessage);
+                            });
                     }
-                    // Yanıt JSON değilse veya mesaj içermiyorsa response.text() kullanılabilir.
                     return response.json().catch(() => { return { message: 'Görev başarıyla tamamlandı!'}; });
                 })
                 .then(data => {
-                    if(taskUpdateResultDiv) {
-                        taskUpdateResultDiv.innerHTML = `<div class="alert alert-success py-2">${data.message || 'Görev başarıyla tamamlandı!'} Sayfa yenileniyor...</div>`;
+                    let message = (data && data.message) ? data.message : 'Görev başarıyla tamamlandı!';
+                    if(taskUpdateResultDivMyTasks) {
+                        taskUpdateResultDivMyTasks.innerHTML = `<div class="alert alert-success py-2">${message} Sayfa yenileniyor...</div>`;
                     }
-                    setTimeout(() => { window.location.reload(); }, 2000);
+                    setTimeout(() => { window.location.reload(); }, 1500);
                 })
                 .catch(error => {
                     console.error("Görev tamamlama hatası:", error);
-                    if(taskUpdateResultDiv) {
-                        taskUpdateResultDiv.innerHTML = `<div class="alert alert-danger py-2">Hata: ${error.message}</div>`;
+                    if(taskUpdateResultDivMyTasks) {
+                        taskUpdateResultDivMyTasks.innerHTML = `<div class="alert alert-danger py-2">Hata: ${error.message}</div>`;
                     }
-                    if(buttonElement) buttonElement.disabled = false;
+                    buttonElement.disabled = false;
                 });
         };
     </script>

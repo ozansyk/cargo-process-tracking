@@ -30,12 +30,9 @@ public class PanelController {
 
     private final CargoService cargoService;
 
-    // Sıralı ve Türkçe Durum İsimleri için Map
-    // Bu map, sorgulama sayfasındaki dropdown'ı doldurmak için kullanılacak.
     private static final Map<CargoStatus, String> ORDERED_STATUS_DISPLAY_NAMES;
     static {
         ORDERED_STATUS_DISPLAY_NAMES = new LinkedHashMap<>();
-        // Enum sabitlerinin tanımlandığı sırayla ekleyelim
         Arrays.stream(CargoStatus.values()).forEach(status -> {
             String displayName = switch (status) {
                 case PENDING -> "Beklemede";
@@ -47,170 +44,17 @@ public class PanelController {
                 case OUT_FOR_DELIVERY -> "Dağıtımda";
                 case DELIVERED -> "Teslim Edildi";
                 case CANCELLED -> "İptal Edildi";
-                default -> status.name(); // Eşleşme yoksa enum adını kullan
+                default -> status.name();
             };
             ORDERED_STATUS_DISPLAY_NAMES.put(status, displayName);
         });
     }
 
-    // Kullanıcı bilgilerini ve aktif menü öğesini model'e ekleyen yardımcı metot
-    private void addCommonPanelAttributes(Model model, Authentication authentication, String activeMenuItem) {
+    // Bu metot PanelController içinde kalmalı veya bir utility sınıfına taşınmalı.
+    // DeploymentController'da kopyası vardı, eğer ortak bir utility'ye taşınırsa oradan çağrılabilir.
+    public void addCommonPanelAttributes(Model model, Authentication authentication, String activeMenuItem) {
         String username = "Kullanıcı";
         String roles = "Bilinmiyor";
-        if (authentication != null && authentication.isAuthenticated()) {
-            Object principal = authentication.getPrincipal();
-            if (principal instanceof UserDetails) {
-                username = ((UserDetails) principal).getUsername();
-                roles = ((UserDetails) principal).getAuthorities().stream()
-                        .map(GrantedAuthority::getAuthority)
-                        .map(role -> role.startsWith("ROLE_") ? role.substring(5) : role) // "ROLE_" prefix'ini kaldır
-                        .collect(Collectors.joining(", "));
-            } else {
-                // Eğer principal UserDetails değilse, getName() genellikle kullanıcı adını verir
-                username = authentication.getName();
-            }
-        }
-        model.addAttribute("username", username);
-        model.addAttribute("userRoles", roles);
-        model.addAttribute("activeMenuItem", activeMenuItem); // Layout için aktif menü öğesi
-    }
-
-    @GetMapping
-    public String showPanel(Model model, Authentication authentication) {
-        addCommonPanelAttributes(model, authentication, "anaPanel"); // Aktif menü: anaPanel
-        try {
-            PanelDataDto panelData = cargoService.getPanelData();
-            model.addAttribute("panelData", panelData);
-        } catch (Exception e) {
-            log.error("Panel verileri alınırken hata oluştu: {}", e.getMessage(), e);
-            model.addAttribute("panelError", "Panel verileri yüklenirken bir sorun oluştu.");
-            // Hata durumunda bile boş bir panelData nesnesi gönderelim ki Thymeleaf'te null check azalsın
-            model.addAttribute("panelData", PanelDataDto.builder()
-                    .beklemedeAlinanCount(0)
-                    .tasiniyorTransferdeCount(0)
-                    .dagitimdaCount(0)
-                    .teslimEdilenCount(0)
-                    .iptalEdilenCount(0)
-                    .recentActivities(List.of())
-                    .build());
-        }
-        return "panel"; // templates/panel.html
-    }
-
-    @GetMapping("/yeni-kargo")
-    public String showNewCargoForm(Model model, Authentication authentication) {
-        addCommonPanelAttributes(model, authentication, "yeniKargo"); // Aktif menü: yeniKargo
-        // Eğer redirect sonrası model'de zaten bir "createCargoRequest" varsa (PRG sonrası), onu kullanır.
-        // Yoksa (ilk GET isteği), yeni bir tane oluşturur.
-        if (!model.containsAttribute("createCargoRequest")) {
-            model.addAttribute("createCargoRequest", new CreateCargoRequest());
-        }
-        return "panel-yeni-kargo"; // templates/panel-yeni-kargo.html
-    }
-
-    @PostMapping("/yeni-kargo")
-    public String processNewCargoForm(@Valid @ModelAttribute("createCargoRequest") CreateCargoRequest request,
-                                      BindingResult bindingResult,
-                                      Model model, // Hata durumunda aynı sayfaya dönmek için Model
-                                      Authentication authentication,
-                                      RedirectAttributes redirectAttributes) { // Başarı durumunda redirect için
-        // Hata durumunda sayfaya geri dönerken model'e tekrar eklenmeli
-        addCommonPanelAttributes(model, authentication, "yeniKargo");
-
-        if (bindingResult.hasErrors()) {
-            log.warn("Yeni kargo formu validation hataları içeriyor: {}", bindingResult.getAllErrors());
-            // createCargoRequest zaten model'de @ModelAttribute sayesinde
-            return "panel-yeni-kargo"; // Validasyon hatalarıyla formu tekrar göster
-        }
-        try {
-            CargoResponse response = cargoService.createCargoAndStartProcess(request);
-            log.info("Yeni kargo başarıyla oluşturuldu. Takip No: {}", response.getTrackingNumber());
-
-            // PRG pattern: Başarı mesajını ve veriyi RedirectAttributes ile taşı
-            redirectAttributes.addFlashAttribute("showSuccessModal", true);
-            redirectAttributes.addFlashAttribute("successMessage", "Kargo başarıyla kaydedildi!");
-            redirectAttributes.addFlashAttribute("trackingNumber", response.getTrackingNumber());
-            // Başarılı işlem sonrası formu temizlemek için yeni bir DTO gönderilebilir veya GET handler'da yapılabilir.
-            // redirectAttributes.addFlashAttribute("createCargoRequest", new CreateCargoRequest()); // Bu, GET /yeni-kargo'da ele alınacak.
-
-            return "redirect:/panel/yeni-kargo"; // Başarılı işlem sonrası GET isteğiyle aynı sayfaya yönlendir
-        } catch (Exception e) {
-            log.error("Yeni kargo kaydedilirken hata oluştu: {}", e.getMessage(), e);
-            model.addAttribute("formError", "Kargo kaydedilirken beklenmedik bir hata oluştu: " + e.getMessage());
-            // createCargoRequest zaten model'de
-            return "panel-yeni-kargo"; // Hata mesajıyla formu tekrar göster
-        }
-    }
-
-    @GetMapping("/sorgula")
-    public String showCargoQueryPage(@ModelAttribute("searchCriteria") CargoSearchCriteria criteria, // Formdan gelen veya default
-                                     @RequestParam(defaultValue = "0") int page,
-                                     @RequestParam(defaultValue = "10") int size,
-                                     Model model, Authentication authentication) {
-        addCommonPanelAttributes(model, authentication, "kargoSorgula"); // Aktif menü: kargoSorgula
-
-        // Eğer searchCriteria'da null alanlar varsa ve bu sorun yaratıyorsa, burada default değerler atanabilir.
-        // Örneğin: if (criteria.getTrackingNo() == null) criteria.setTrackingNo("");
-
-        Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "lastUpdatedAt")); // Veya "id"
-        Page<CargoSearchResultDto> cargoPage = cargoService.searchCargos(criteria, pageable);
-
-        model.addAttribute("kargoPage", cargoPage);
-        model.addAttribute("statusDisplayMap", ORDERED_STATUS_DISPLAY_NAMES); // Dropdown için durum listesi
-        // searchCriteria zaten model'e @ModelAttribute ile eklenmiş durumda.
-        // Eğer ilk GET isteğinde boş bir criteria nesnesi göndermek isterseniz:
-        // if (!model.containsAttribute("searchCriteria")) {
-        //     model.addAttribute("searchCriteria", new CargoSearchCriteria());
-        // }
-        // Ama @ModelAttribute bunu genellikle halleder.
-
-        return "panel-sorgula"; // templates/panel-sorgula.html
-    }
-
-    @GetMapping("/kullanici-yonetimi")
-    public String showUserManagementPage(Model model, Authentication authentication) { /* ... Önceki kod ... */
-        addUserAuthInfoToModel(model, authentication);
-        model.addAttribute("activePage", "kullaniciYonetimi");
-        return "panel-kullanici-yonetimi";
-    }
-
-    // --- YENİ: Aktif Görevler Sayfası ---
-    @GetMapping("/aktif-gorevler")
-    public String showActiveTasksPage(Model model, Authentication authentication) {
-        addUserAuthInfoToModel(model, authentication); // Navbar için kullanıcı bilgisi
-        model.addAttribute("activePage", "aktifGorevler"); // Sidebar için
-
-        String username = null;
-        List<String> userGroups = new ArrayList<>();
-
-        if (authentication != null && authentication.getPrincipal() instanceof UserDetails) {
-            UserDetails userDetails = (UserDetails) authentication.getPrincipal();
-            username = userDetails.getUsername();
-            userGroups = userDetails.getAuthorities().stream()
-                    .map(GrantedAuthority::getAuthority)
-                    // Spring Security genellikle "ROLE_" prefix'i ekler,
-                    // Camunda'da grup adı direkt kullanılır. Bu kısmı
-                    // Camunda'daki grup isimlerinizle eşleşecek şekilde ayarlayın.
-                    // Örneğin, eğer Camunda'da grup adı "kargo-calisanlari" ise
-                    // ve Spring Security rolü "ROLE_KARGO_CALISANLARI" ise,
-                    // burada bir dönüşüm yapmanız gerekebilir veya Camunda'da
-                    // grupları "ROLE_" prefix'i olmadan oluşturabilirsiniz.
-                    // Şimdilik, Camunda'daki grup adlarının Spring Security rollerinden
-                    // (prefixsiz) geldiğini varsayalım.
-                    .map(role -> role.startsWith("ROLE_") ? role.substring(5) : role)
-                    .collect(Collectors.toList());
-        }
-
-        List<ActiveTaskDto> activeTasks = cargoService.getActiveUserTasks(username, userGroups);
-        model.addAttribute("activeTasks", activeTasks);
-
-        return "panel-aktif-gorevler"; // resources/templates/panel-aktif-gorevler.html
-    }
-
-    // Yardımcı metot
-    public void addUserAuthInfoToModel(Model model, Authentication authentication) { /* ... Önceki kod ... */
-        String username = "Kullanıcı";
-        String roles = "";
         if (authentication != null && authentication.isAuthenticated()) {
             Object principal = authentication.getPrincipal();
             if (principal instanceof UserDetails) {
@@ -220,10 +64,124 @@ public class PanelController {
                         .map(role -> role.startsWith("ROLE_") ? role.substring(5) : role)
                         .collect(Collectors.joining(", "));
             } else {
-                username = principal.toString();
+                username = authentication.getName();
             }
         }
         model.addAttribute("username", username);
         model.addAttribute("userRoles", roles);
+        model.addAttribute("activeMenuItem", activeMenuItem);
+    }
+
+    @GetMapping
+    public String showPanel(Model model, Authentication authentication) {
+        addCommonPanelAttributes(model, authentication, "anaPanel");
+        try {
+            PanelDataDto panelData = cargoService.getPanelData();
+            model.addAttribute("panelData", panelData);
+        } catch (Exception e) {
+            log.error("Panel verileri alınırken hata oluştu: {}", e.getMessage(), e);
+            model.addAttribute("panelError", "Panel verileri yüklenirken bir sorun oluştu.");
+            model.addAttribute("panelData", PanelDataDto.builder()
+                    .beklemedeAlinanCount(0).tasiniyorTransferdeCount(0).dagitimdaCount(0)
+                    .teslimEdilenCount(0).iptalEdilenCount(0).recentActivities(List.of()).build());
+        }
+        return "panel";
+    }
+
+    @GetMapping("/yeni-kargo")
+    public String showNewCargoForm(Model model, Authentication authentication) {
+        addCommonPanelAttributes(model, authentication, "yeniKargo");
+        if (!model.containsAttribute("createCargoRequest")) {
+            model.addAttribute("createCargoRequest", new CreateCargoRequest());
+        }
+        return "panel-yeni-kargo";
+    }
+
+    @PostMapping("/yeni-kargo")
+    public String processNewCargoForm(@Valid @ModelAttribute("createCargoRequest") CreateCargoRequest request,
+                                      BindingResult bindingResult, Model model,
+                                      Authentication authentication, RedirectAttributes redirectAttributes) {
+        addCommonPanelAttributes(model, authentication, "yeniKargo");
+        if (bindingResult.hasErrors()) {
+            log.warn("Yeni kargo formu validation hataları içeriyor: {}", bindingResult.getAllErrors());
+            return "panel-yeni-kargo";
+        }
+        try {
+            CargoResponse response = cargoService.createCargoAndStartProcess(request);
+            log.info("Yeni kargo başarıyla oluşturuldu. Takip No: {}", response.getTrackingNumber());
+            redirectAttributes.addFlashAttribute("showSuccessModal", true);
+            redirectAttributes.addFlashAttribute("successMessage", "Kargo başarıyla kaydedildi!");
+            redirectAttributes.addFlashAttribute("trackingNumber", response.getTrackingNumber());
+            return "redirect:/panel/yeni-kargo";
+        } catch (Exception e) {
+            log.error("Yeni kargo kaydedilirken hata oluştu: {}", e.getMessage(), e);
+            model.addAttribute("formError", "Kargo kaydedilirken beklenmedik bir hata oluştu: " + e.getMessage());
+            return "panel-yeni-kargo";
+        }
+    }
+
+    @GetMapping("/sorgula")
+    public String showCargoQueryPage(@ModelAttribute("searchCriteria") CargoSearchCriteria criteria,
+                                     @RequestParam(defaultValue = "0") int page,
+                                     @RequestParam(defaultValue = "10") int size,
+                                     Model model, Authentication authentication) {
+        addCommonPanelAttributes(model, authentication, "kargoSorgula");
+        Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "lastUpdatedAt"));
+        Page<CargoSearchResultDto> cargoPage = cargoService.searchCargos(criteria, pageable);
+        model.addAttribute("kargoPage", cargoPage);
+        model.addAttribute("statusDisplayMap", ORDERED_STATUS_DISPLAY_NAMES);
+        return "panel-sorgula";
+    }
+
+    @GetMapping("/kullanici-yonetimi")
+    public String showUserManagementPage(Model model, Authentication authentication) {
+        // DİKKAT: Burada 'addCommonPanelAttributes' kullanılmalı ve 'activeMenuItem' doğru set edilmeli.
+        addCommonPanelAttributes(model, authentication, "kullaniciYonetimi");
+        // TODO: Kullanıcı yönetimi için gerekli veriler model'e eklenebilir.
+        return "panel-kullanici-yonetimi"; // Bu HTML dosyasının var olduğundan emin olun.
+    }
+
+    @GetMapping("/aktif-gorevler")
+    public String showActiveTasksPage(Model model, Authentication authentication) {
+        // DİKKAT: Burada 'addCommonPanelAttributes' kullanılmalı ve 'activeMenuItem' doğru set edilmeli.
+        addCommonPanelAttributes(model, authentication, "aktifGorevler");
+
+        String username = null;
+        List<String> userGroups = new ArrayList<>();
+
+        if (authentication != null && authentication.getPrincipal() instanceof UserDetails userDetails) {
+            username = userDetails.getUsername(); // Camunda'daki kullanıcı ID'si ile eşleşmeli
+            userGroups = userDetails.getAuthorities().stream()
+                    .map(GrantedAuthority::getAuthority)
+                    // ÖNEMLİ: Buradaki rol-grup eşleştirmesinin doğru olduğundan emin olun.
+                    // Camunda'daki grup adlarınızla Spring Security rolleriniz arasındaki eşleşmeyi burada yapın.
+                    // Örnek: Camunda'da grup "satis_ekibi", Spring rolü "ROLE_SATIS_EKIBI" ise,
+                    // .map(role -> role.equals("ROLE_SATIS_EKIBI") ? "satis_ekibi" : (role.startsWith("ROLE_") ? role.substring(5).toLowerCase() : role.toLowerCase()))
+                    .map(role -> {
+                        // Bu map'lemeyi kendi Camunda grup isimlerinize göre güncelleyin.
+                        if ("ROLE_ADMIN".equals(role)) return "camunda-admin"; // Camunda default admin grubu
+                        if ("ROLE_KARGO_CALISANLARI".equals(role)) return "kargo-calisanlari";
+                        if ("ROLE_MUHASEBE_EKIBI".equals(role)) return "muhasebe-ekibi";
+                        // Diğer roller için genel bir dönüşüm veya özel map'lemeler
+                        return role.startsWith("ROLE_") ? role.substring(5).toLowerCase() : role.toLowerCase();
+                    })
+                    .collect(Collectors.toList());
+            log.info("Aktif görevler sorgulanıyor. Kullanıcı: '{}', Gruplar: {}", username, userGroups);
+        } else {
+            log.warn("Aktif görevler için kimlik doğrulanmış kullanıcı bulunamadı. Görev listesi boş olacak.");
+            model.addAttribute("activeTasks", List.of());
+            model.addAttribute("errorMessage", "Aktif görevleri listelemek için giriş yapmalısınız veya yetkiniz bulunmamaktadır.");
+            return "panel-aktif-gorevler";
+        }
+
+        List<ActiveTaskDto> activeTasks = cargoService.getActiveUserTasks(username, userGroups);
+        model.addAttribute("activeTasks", activeTasks);
+
+        if (activeTasks.isEmpty()) {
+            log.info("Kullanıcı '{}' veya grupları {} için gösterilecek aktif Camunda görevi bulunamadı.", username, userGroups);
+        } else {
+            log.info("{} adet aktif Camunda görevi bulundu ve modele eklendi.", activeTasks.size());
+        }
+        return "panel-aktif-gorevler";
     }
 }
