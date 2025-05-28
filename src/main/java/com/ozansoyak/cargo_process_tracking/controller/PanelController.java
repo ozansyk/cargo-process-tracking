@@ -135,38 +135,35 @@ public class PanelController {
 
     @GetMapping("/kullanici-yonetimi")
     public String showUserManagementPage(Model model, Authentication authentication) {
-        // DİKKAT: Burada 'addCommonPanelAttributes' kullanılmalı ve 'activeMenuItem' doğru set edilmeli.
         addCommonPanelAttributes(model, authentication, "kullaniciYonetimi");
         // TODO: Kullanıcı yönetimi için gerekli veriler model'e eklenebilir.
-        return "panel-kullanici-yonetimi"; // Bu HTML dosyasının var olduğundan emin olun.
+        return "panel-kullanici-yonetimi";
     }
 
     @GetMapping("/aktif-gorevler")
     public String showActiveTasksPage(Model model, Authentication authentication) {
-        // DİKKAT: Burada 'addCommonPanelAttributes' kullanılmalı ve 'activeMenuItem' doğru set edilmeli.
-        addCommonPanelAttributes(model, authentication, "aktifGorevler");
+        addCommonPanelAttributes(model, authentication, "aktifGorevler"); // activeMenuItem güncellendi
 
         String username = null;
         List<String> userGroups = new ArrayList<>();
 
         if (authentication != null && authentication.getPrincipal() instanceof UserDetails userDetails) {
-            username = userDetails.getUsername(); // Camunda'daki kullanıcı ID'si ile eşleşmeli
+            username = userDetails.getUsername();
             userGroups = userDetails.getAuthorities().stream()
                     .map(GrantedAuthority::getAuthority)
-                    // ÖNEMLİ: Buradaki rol-grup eşleştirmesinin doğru olduğundan emin olun.
-                    // Camunda'daki grup adlarınızla Spring Security rolleriniz arasındaki eşleşmeyi burada yapın.
-                    // Örnek: Camunda'da grup "satis_ekibi", Spring rolü "ROLE_SATIS_EKIBI" ise,
-                    // .map(role -> role.equals("ROLE_SATIS_EKIBI") ? "satis_ekibi" : (role.startsWith("ROLE_") ? role.substring(5).toLowerCase() : role.toLowerCase()))
+                    // ÖNEMLİ: Camunda'daki grup adlarınızla Spring Security rolleriniz arasındaki
+                    // eşleşmeyi burada doğru bir şekilde yapın.
                     .map(role -> {
-                        // Bu map'lemeyi kendi Camunda grup isimlerinize göre güncelleyin.
-                        if ("ROLE_ADMIN".equals(role)) return "camunda-admin"; // Camunda default admin grubu
-                        if ("ROLE_KARGO_CALISANLARI".equals(role)) return "kargo-calisanlari";
-                        if ("ROLE_MUHASEBE_EKIBI".equals(role)) return "muhasebe-ekibi";
-                        // Diğer roller için genel bir dönüşüm veya özel map'lemeler
+                        if ("ROLE_ADMIN".equals(role)) return "camunda-admin"; // Camunda'nın varsayılan admin grubu
+                        if ("ROLE_KARGO_CALISANLARI".equals(role)) return "kargo-calisanlari"; // Örnek grup
+                        if ("ROLE_MUHASEBE_EKIBI".equals(role)) return "muhasebe-ekibi";   // Örnek grup
+                        // Genel bir kural olarak, "ROLE_" prefix'ini kaldırıp küçük harfe çevirebilirsiniz,
+                        // ama Camunda'daki grup adlarınızla tam eşleşmeli.
                         return role.startsWith("ROLE_") ? role.substring(5).toLowerCase() : role.toLowerCase();
                     })
+                    .filter(groupName -> !groupName.isEmpty()) // Boş grup adlarını filtrele
                     .collect(Collectors.toList());
-            log.info("Aktif görevler sorgulanıyor. Kullanıcı: '{}', Gruplar: {}", username, userGroups);
+            log.info("Aktif görevler sorgulanıyor. Kullanıcı: '{}', Elde edilen Camunda grupları: {}", username, userGroups);
         } else {
             log.warn("Aktif görevler için kimlik doğrulanmış kullanıcı bulunamadı. Görev listesi boş olacak.");
             model.addAttribute("activeTasks", List.of());
@@ -174,7 +171,15 @@ public class PanelController {
             return "panel-aktif-gorevler";
         }
 
-        List<ActiveTaskDto> activeTasks = cargoService.getActiveUserTasks(username, userGroups);
+        // Eğer username null değilse (giriş yapmış bir kullanıcı varsa) görevleri sorgula
+        List<ActiveTaskDto> activeTasks = new ArrayList<>();
+        if (username != null) {
+            activeTasks = cargoService.getActiveUserTasks(username, userGroups);
+        } else if (!userGroups.isEmpty()) { // Sadece grup bazlı sorgulama (kullanıcı null ama grupları varsa - pek olası değil)
+            activeTasks = cargoService.getActiveUserTasks(null, userGroups);
+        }
+
+
         model.addAttribute("activeTasks", activeTasks);
 
         if (activeTasks.isEmpty()) {

@@ -6,6 +6,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.time.LocalDateTime;
+import java.util.List;
 
 @Data
 @NoArgsConstructor
@@ -20,7 +21,7 @@ public class ActiveTaskDto {
     private String businessKey;             // Genellikle Takip Numarası
     private LocalDateTime createTime;       // Görevin oluşturulma zamanı
     private String assignee;                // Göreve atanan kişi (varsa)
-    private String candidateGroups;         // Göreve atanabilecek gruplar (virgülle ayrılmış)
+    private List<String> candidateGroups;         // Göreve atanabilecek gruplar (virgülle ayrılmış)
     // İlgili kargo bilgilerini de ekleyebiliriz (opsiyonel, service'de join ile alınabilir)
     // private String cargoSender;
     // private String cargoReceiver;

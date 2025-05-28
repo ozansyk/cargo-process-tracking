@@ -500,75 +500,80 @@ public class CargoServiceImpl implements CargoService {
     @Override
     @Transactional(readOnly = true)
     public List<ActiveTaskDto> getActiveUserTasks(String username, List<String> userGroups) {
-        TaskQuery query = taskService.createTaskQuery().active();
+        TaskQuery query = taskService.createTaskQuery().active(); // Temel sorgu
 
         boolean hasUserCriteria = StringUtils.hasText(username);
         boolean hasGroupCriteria = !CollectionUtils.isEmpty(userGroups);
 
         if (hasUserCriteria && hasGroupCriteria) {
-            // Hem kullanıcıya atanmış/aday OLDUĞU VEYA gruplarına aday olan görevler
             query.or()
                     .taskAssignee(username)
-                    .taskCandidateUser(username)
+                    .taskCandidateUser(username) // Kullanıcının aday olduğu görevler
                     .taskCandidateGroupIn(userGroups)
                     .endOr();
         } else if (hasUserCriteria) {
-            // Sadece kullanıcıya atanmış VEYA aday olduğu görevler
             query.or()
                     .taskAssignee(username)
                     .taskCandidateUser(username)
                     .endOr();
         } else if (hasGroupCriteria) {
-            // Sadece gruplara aday olan görevler
             query.taskCandidateGroupIn(userGroups);
+        } else {
+            // Hiçbir kriter yoksa (örn: anonim bir kullanıcı veya yetkisiz), boş liste dön
+            log.warn("getActiveUserTasks: Kullanıcı adı ve grup listesi boş. Aktif görev sorgulanamıyor.");
+            return List.of();
         }
-        // Eğer username ve userGroups yoksa (else durumu), query'ye hiçbir ek filtre eklenmez
-        // ve .active() ile başlayan sorgu tüm aktif görevleri getirir. Bu genellikle admin senaryosudur.
 
         List<Task> tasks = query.orderByTaskCreateTime().desc().list();
-        log.info("Kullanıcı '{}', gruplar {} için {} aktif görev bulundu.", username, userGroups, tasks.size());
+        log.info("Camunda sorgusu sonucu kullanıcı '{}', gruplar {} için {} aktif görev bulundu.", username, userGroups, tasks.size());
+        // ... (DTO'ya map etme kısmı devam eder) ...
+        // ... (Bir önceki cevaptaki tam implementasyonu kullanın)
+        Set<String> processDefinitionIds = tasks.stream().map(Task::getProcessDefinitionId).collect(Collectors.toSet());
+        Map<String, ProcessDefinition> pdMap = new HashMap<>();
+        if (!processDefinitionIds.isEmpty()) {
+            List<ProcessDefinition> pds = repositoryService.createProcessDefinitionQuery()
+                    .processDefinitionIdIn(processDefinitionIds.toArray(new String[0]))
+                    .list();
+            pdMap.putAll(pds.stream().collect(Collectors.toMap(ProcessDefinition::getId, pd -> pd)));
+        }
 
-        return tasks.stream().map(task -> {
-            ProcessInstance pi = null;
-            if (task.getProcessInstanceId() != null) {
-                // Aktif süreç örneğini bulmaya çalış, bulunamazsa null olur
-                List<ProcessInstance> instances = runtimeService.createProcessInstanceQuery()
-                        .processInstanceId(task.getProcessInstanceId())
-                        .list();
-                if (!instances.isEmpty()) {
-                    pi = instances.get(0);
-                }
-            }
-            ProcessDefinition pd = null;
-            if (task.getProcessDefinitionId() != null) {
-                try {
-                    pd = repositoryService.getProcessDefinition(task.getProcessDefinitionId());
-                } catch (ProcessEngineException e) {
-                    log.warn("Süreç tanımı bulunamadı: ID {}", task.getProcessDefinitionId());
-                }
-            }
+        return tasks.stream()
+                .map(task -> {
+                    ProcessInstance pi = null;
+                    if (task.getProcessInstanceId() != null) {
+                        List<ProcessInstance> instances = runtimeService.createProcessInstanceQuery()
+                                .processInstanceId(task.getProcessInstanceId())
+                                .list(); // .singleResult() yerine .list() kullanmak daha güvenli olabilir, ama aktif bir görev için tek PI olmalı.
+                        if (!instances.isEmpty()) {
+                            pi = instances.get(0);
+                        }
+                    }
+                    ProcessDefinition pd = pdMap.get(task.getProcessDefinitionId());
+                    String processDefinitionName = (pd != null && StringUtils.hasText(pd.getName())) ? pd.getName() : (pd != null ? pd.getKey() : "Bilinmeyen Süreç");
 
-            String candidateGroupString = null;
-            if (task.getId() != null) {
-                candidateGroupString = taskService.getIdentityLinksForTask(task.getId()).stream()
-                        .filter(link -> link.getGroupId() != null && "candidate".equals(link.getType()))
-                        .map(link -> link.getGroupId())
-                        .collect(Collectors.joining(", "));
-                if (candidateGroupString.isEmpty()) candidateGroupString = null;
-            }
+                    String businessKeyFromPI = (pi != null) ? pi.getBusinessKey() : null;
+                    // Bazen task'ın kendisinde de businessKey olabilir (örn: CMMN case task'ları)
+                    // Eğer process instance'dan alınamazsa, task'tan gelen process business key'e bakılabilir.
+                    // Ancak BPMN user task'larında genellikle process instance'a bakılır.
 
-            return ActiveTaskDto.builder()
-                    .taskId(task.getId())
-                    .taskName(task.getName())
-                    .taskDefinitionKey(task.getTaskDefinitionKey())
-                    .processInstanceId(task.getProcessInstanceId())
-                    .processDefinitionName(pd != null ? pd.getName() : (task.getProcessDefinitionId() != null ? "Tanım ID: "+task.getProcessDefinitionId() : "N/A"))
-                    .businessKey(pi != null ? pi.getBusinessKey() : (task.getCaseInstanceId() != null ? "CMMN Case" : null))
-                    .createTime(task.getCreateTime() != null ? task.getCreateTime().toInstant().atZone(ZoneId.systemDefault()).toLocalDateTime() : null)
-                    .assignee(task.getAssignee())
-                    .candidateGroups(candidateGroupString)
-                    .build();
-        }).collect(Collectors.toList());
+                    List<String> candidateGroupList = taskService.getIdentityLinksForTask(task.getId()).stream()
+                            .filter(link -> link.getGroupId() != null && "candidate".equals(link.getType()))
+                            .map(link -> link.getGroupId())
+                            .collect(Collectors.toList());
+
+                    return ActiveTaskDto.builder()
+                            .taskId(task.getId())
+                            .taskName(StringUtils.hasText(task.getName()) ? task.getName() : task.getTaskDefinitionKey())
+                            .taskDefinitionKey(task.getTaskDefinitionKey())
+                            .processInstanceId(task.getProcessInstanceId())
+                            .processDefinitionName(processDefinitionName)
+                            .businessKey(businessKeyFromPI)
+                            .createTime(task.getCreateTime() != null ? task.getCreateTime().toInstant().atZone(ZoneId.systemDefault()).toLocalDateTime() : null)
+                            .assignee(task.getAssignee())
+                            .candidateGroups(candidateGroupList) // DTO'da List<String> ise direkt listeyi ver
+                            .build();
+                })
+                .collect(Collectors.toList());
     }
 
     // --- YENİ METOT: Task ID ile Görev Tamamlama ---
