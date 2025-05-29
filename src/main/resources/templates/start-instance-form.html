@@ -10,16 +10,15 @@
     <th:block layout:fragment="pageStyles">
         <style>
             .card {
-                /* main-layout.html'deki genel .card stilini kullanabilir
-                   veya burada özelleştirebilirsiniz. */
+
                 box-shadow: 0 0.125rem 0.25rem rgba(0,0,0,.075);
             }
             .form-text {
-                font-size: .875em; /* Bootstrap varsayılanından biraz daha küçük */
-                color: #6c757d;   /* Bootstrap'in text-muted rengi */
+                font-size: .875em;
+                color: #6c757d;
             }
-            /* Hata mesajları için biraz daha belirginlik */
-            .alert strong + span { /* Hata mesajlarında strong etiketten sonra gelen span için */
+
+            .alert strong + span {
                 display: block;
                 margin-top: 0.25rem;
             }
@@ -36,7 +35,6 @@
     <div th:if="${successMessage}" class="alert alert-success alert-dismissible fade show" role="alert">
         <i class="bi bi-check-circle-fill me-2"></i>
         <span th:text="${successMessage}"></span>
-        <!-- trackingNumberInfo için ek gösterim -->
         <div th:if="${trackingNumberInfo}" class="mt-1">
             <strong th:text="${trackingNumberInfo}"></strong>
         </div>
@@ -56,8 +54,6 @@
 
     <div class="card">
         <div class="card-body">
-            <!-- Form action'ı DeploymentController'daki @PostMapping("/start-instance") ile eşleşmeli -->
-            <!-- Base path /panel/deployments olduğu için @{/panel/deployments/start-instance} olacak -->
             <form method="POST" th:action="@{/panel/deployments/start-instance}" th:object="${startRequest}" class="needs-validation" novalidate>
                 <div class="mb-3">
                     <label for="processDefinitionKey" class="form-label fw-bold">Başlatılacak Süreç Tanımı:</label>
@@ -67,9 +63,7 @@
                                 th:value="${pd.key}"
                                 th:text="|${pd.name} (Key: ${pd.key}, Ver: ${pd.version})|"></option>
                     </select>
-                    <!-- BindingResult hatası varsa göster -->
                     <div class="invalid-feedback" th:if="${#fields.hasErrors('processDefinitionKey')}" th:errors="*{processDefinitionKey}"></div>
-                    <!-- Genel required mesajı (JS validasyonu için) -->
                     <div class="invalid-feedback" th:unless="${#fields.hasErrors('processDefinitionKey')}">Lütfen bir süreç tanımı seçin.</div>
                 </div>
 

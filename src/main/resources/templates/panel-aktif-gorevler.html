@@ -98,15 +98,12 @@
 
 
 <th:block layout:fragment="pageScripts">
-    <!-- panel-sorgula.html'deki scriptleri (veya ortak bir .js dosyasını) dahil etmelisiniz -->
-    <!-- Örnek: <script th:src="@{/js/panel-sorgula-scripts.js}"></script> -->
-    <!-- Şimdilik panel-sorgula.html'deki openDetailModal'ın global olduğunu varsayıyoruz -->
+
 
     <script th:inline="javascript">
-        // Kargo Detay Modalını Açmak için (panel-sorgula.js'deki openDetailModal'ı çağırır)
         window.openCargoDetailModalFromTasksPage = function(trackingNumber) {
             if (typeof window.openDetailModal === 'function') {
-                window.openDetailModal(trackingNumber); // panel-sorgula.html'deki global fonksiyonu çağır
+                window.openDetailModal(trackingNumber);
             } else {
                 console.error("'openDetailModal' fonksiyonu bulunamadı. Ortak scriptlerin yüklendiğinden emin olun.");
                 alert("Kargo detayları görüntülenemiyor.");
@@ -118,8 +115,6 @@
         window.handleGenericTaskCompletion = function(buttonElement) {
             const taskId = buttonElement.getAttribute('data-task-id');
             const taskName = buttonElement.getAttribute('data-task-name');
-            // const taskDefinitionKey = buttonElement.getAttribute('data-task-def-key'); // Alınıyor ama henüz kullanılmıyor
-            // const businessKey = buttonElement.getAttribute('data-business-key'); // Alınıyor ama henüz kullanılmıyor
 
             if (!taskId) {
                 console.error("Task ID bulunamadı!");
@@ -137,20 +132,13 @@
             buttonElement.disabled = true;
 
             const headers = { 'Content-Type': 'application/json' };
-            // CSRF Token (Eğer Spring Security CSRF aktifse ve globalde tanımlıysa)
-            // if (typeof csrfToken !== 'undefined' && csrfToken) { headers[csrfHeaderName] = csrfToken; }
 
-
-            // GENEL GÖREV TAMAMLAMA ENDPOINT'İ (Backend'de oluşturulmalı)
-            // Bu endpoint sadece taskId alıp görevi tamamlamalıdır.
-            // Gerekirse, BPMN'deki 'nextStepVariable' gibi standart değişkenleri ayarlayabilir.
-            const fetchUrl = `/api/cargos/tasks/${taskId}/complete`; // Bu endpoint'in var olduğundan emin olun
-            let httpMethod = 'PUT'; // Veya POST
+            const fetchUrl = `/api/cargos/tasks/${taskId}/complete`;
+            let httpMethod = 'PUT';
 
             fetch(fetchUrl, {
                 method: httpMethod,
                 headers: headers
-                // Şimdilik body yok, çünkü ek input sormuyoruz.
             })
                 .then(response => {
                     if (!response.ok) {
