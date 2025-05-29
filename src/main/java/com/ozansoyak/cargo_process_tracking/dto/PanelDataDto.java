@@ -9,7 +9,7 @@ import java.util.List;
 @Builder
 public class PanelDataDto {
     private long beklemedeAlinanCount;
-    private long tasiniyorTransferdeCount; // YENİ ALAN
+    private long tasiniyorTransferdeCount;
     private long dagitimdaCount;
     private long teslimEdilenCount;
     private long iptalEdilenCount;

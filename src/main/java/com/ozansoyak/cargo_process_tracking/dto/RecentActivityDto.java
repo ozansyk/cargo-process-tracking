@@ -11,8 +11,7 @@ import java.time.LocalDateTime;
 @AllArgsConstructor
 public class RecentActivityDto {
     private String trackingNumber;
-    private String statusDescription; // Kullanıcı dostu durum
-    private String statusBadgeClass;  // Bootstrap badge class
-    private LocalDateTime timestamp;     // İşlem zamanı
-    // private String performedBy; // İleride eklenebilir
+    private String statusDescription;
+    private String statusBadgeClass;
+    private LocalDateTime timestamp;
 }

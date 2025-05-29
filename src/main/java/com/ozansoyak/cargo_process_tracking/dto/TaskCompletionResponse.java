@@ -9,6 +9,6 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 public class TaskCompletionResponse {
     private String message;
-    private String completedTaskName; // Tamamlanan görevin kullanıcı dostu adı
-    private String completedTaskKey;  // Tamamlanan görevin teknik anahtarı
+    private String completedTaskName;
+    private String completedTaskKey;
 }

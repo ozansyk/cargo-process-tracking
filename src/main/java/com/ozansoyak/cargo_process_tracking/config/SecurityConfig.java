@@ -20,14 +20,13 @@ import java.nio.charset.StandardCharsets;
 import java.util.Optional;
 
 @Configuration
-@EnableWebSecurity // Spring Security'yi etkinleştir
+@EnableWebSecurity
 @Slf4j
 public class SecurityConfig {
 
     private final UserDetailsServiceImpl userDetailsService;
-    private final UserRepository userRepository; // Failure handler için inject edelim
+    private final UserRepository userRepository;
 
-    // Constructor Injection
     public SecurityConfig(UserDetailsServiceImpl userDetailsService, UserRepository userRepository) {
         this.userDetailsService = userDetailsService;
         this.userRepository = userRepository;
@@ -39,24 +38,17 @@ public class SecurityConfig {
         http
                 .csrf(AbstractHttpConfigurer::disable)
                 .authorizeHttpRequests(authz -> authz
-                        // Herkese açık yollar
                         .requestMatchers(
                                 "/", "/login", "/track**", "/error",
                                 "/images/**", "/css/**", "/js/**"
                                 ,"/api/cargos/**" // Test için açık, sonra kısıtla
                         ).permitAll()
-                        // Camunda
-                        .requestMatchers("/camunda/**", "/engine-rest/**", "/app/**").authenticated()
-                        // --- YENİ KURALLAR ---
-                        // Kullanıcı Yönetimi sadece ADMIN rolüne sahip olanlar
+                        .requestMatchers("/camunda/**", "/engine-rest/**", "/app/**").permitAll()
                         .requestMatchers("/panel/kullanici-yonetimi").hasRole("ADMIN")
                         .requestMatchers("/deployments/**").hasRole("ADMIN")
-                        .requestMatchers("/panel/aktif-gorevler").authenticated() // Yeni sayfa
-                        .requestMatchers("/api/cargos/tasks/**").authenticated() // Yeni API endpoint'i
-                        // Diğer tüm /panel altındaki yollar en azından giriş yapmış olmayı gerektirsin
+                        .requestMatchers("/panel/aktif-gorevler").authenticated()
+                        .requestMatchers("/api/cargos/tasks/**").authenticated()
                         .requestMatchers("/panel/**").authenticated()
-                        // ----------------------
-                        // Diğer tüm istekler (yukarıdakilerle eşleşmeyen) kimlik doğrulaması gerektirsin
                         .anyRequest().authenticated()
                 )
                 .formLogin(form -> form
@@ -64,8 +56,8 @@ public class SecurityConfig {
                         .loginProcessingUrl("/login")
                         .usernameParameter("email")
                         .passwordParameter("password")
-                        .defaultSuccessUrl("/panel", true) // Başarılı girişte panele yönlendir
-                        .failureHandler((request, response, exception) -> { // Hata yönetimi aynı
+                        .defaultSuccessUrl("/panel", true)
+                        .failureHandler((request, response, exception) -> {
                             String email = request.getParameter("email");
                             Optional<UserEntity> userOpt = userRepository.findByEmail(email);
                             String errorMessage;
@@ -99,14 +91,13 @@ public class SecurityConfig {
         return new BCryptPasswordEncoder();
     }
 
-    // AuthenticationManager Bean'i (Spring Boot 3'te bu şekilde tanımlamak daha yaygın)
     @Bean
     public AuthenticationManager authenticationManager(HttpSecurity http) throws Exception {
         AuthenticationManagerBuilder authenticationManagerBuilder =
                 http.getSharedObject(AuthenticationManagerBuilder.class);
         authenticationManagerBuilder
-                .userDetailsService(userDetailsService) // Kendi UserDetailsService'imiz
-                .passwordEncoder(passwordEncoder());    // Kendi PasswordEncoder'ımız
+                .userDetailsService(userDetailsService)
+                .passwordEncoder(passwordEncoder());
         return authenticationManagerBuilder.build();
     }
 

@@ -21,8 +21,5 @@ public class ActiveTaskDto {
     private String businessKey;             // Genellikle Takip Numarası
     private LocalDateTime createTime;       // Görevin oluşturulma zamanı
     private String assignee;                // Göreve atanan kişi (varsa)
-    private List<String> candidateGroups;         // Göreve atanabilecek gruplar (virgülle ayrılmış)
-    // İlgili kargo bilgilerini de ekleyebiliriz (opsiyonel, service'de join ile alınabilir)
-    // private String cargoSender;
-    // private String cargoReceiver;
+    private List<String> candidateGroups;   // Göreve atanabilecek gruplar (virgülle ayrılmış)
 }

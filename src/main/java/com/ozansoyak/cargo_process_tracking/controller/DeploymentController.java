@@ -28,11 +28,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
-// Projenizdeki CAMUNDA_PROCESS_DEFINITION_KEY sabitinin doğru yerden import edilmesi veya burada tanımlanması gerekir.
-// Örnek: private static final String CARGO_TRACKING_PROCESS_KEY = "cargoTrackingProcessV3";
-
 @Controller
-@RequestMapping("/panel/deployments") // Base path güncellendi
+@RequestMapping("/panel/deployments")
 @RequiredArgsConstructor
 @Slf4j
 @PreAuthorize("hasRole('ADMIN')")
@@ -41,7 +38,6 @@ public class DeploymentController {
     private final RepositoryService repositoryService;
     private final RuntimeService runtimeService;
 
-    // Ortak UI attribute'larını ekleyen metot
     private void addCommonPanelAttributes(Model model, Authentication authentication, String activeMenuItem) {
         String username = "Kullanıcı";
         String roles = "Bilinmiyor";
@@ -65,16 +61,16 @@ public class DeploymentController {
     @GetMapping("/new-bpmn")
     public String showDeploymentForm(Model model, Authentication authentication) {
         addCommonPanelAttributes(model, authentication, "deployBPMN");
-        return "deploy-form"; // templates/deploy-form.html (veya panel/deploy-form)
+        return "deploy-form";
     }
 
     @PostMapping("/upload")
     public String handleFileUpload(@RequestParam("file") MultipartFile file,
                                    @RequestParam(name = "deploymentName", required = false) String deploymentNameFromRequest,
                                    RedirectAttributes redirectAttributes,
-                                   Authentication authentication, Model model) { // Model eklendi
+                                   Authentication authentication, Model model) {
 
-        addCommonPanelAttributes(model, authentication, "deployBPMN"); // Her durumda lazım
+        addCommonPanelAttributes(model, authentication, "deployBPMN");
 
         if (file.isEmpty()) {
             redirectAttributes.addFlashAttribute("errorMessage", "Lütfen yüklenecek bir BPMN dosyası seçin.");
@@ -120,7 +116,7 @@ public class DeploymentController {
         if (!model.containsAttribute("startRequest")) {
             model.addAttribute("startRequest", new StartProcessInstanceRequest());
         }
-        return "start-instance-form"; // templates/start-instance-form.html
+        return "start-instance-form";
     }
 
     @PostMapping("/start-instance")
@@ -168,7 +164,9 @@ public class DeploymentController {
                                         catch (NumberFormatException e2) { /* String olarak kalır */ }
                                     }
                                 }
-                                if (StringUtils.hasText(key)) { variables.put(key, value); }
+                                if (StringUtils.hasText(key)) {
+                                    variables.put(key, value);
+                                }
                             }
                         }
                     }

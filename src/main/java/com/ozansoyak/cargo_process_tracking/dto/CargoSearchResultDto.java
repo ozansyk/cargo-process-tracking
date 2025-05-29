@@ -16,9 +16,9 @@ public class CargoSearchResultDto {
     private String senderName;
     private String receiverName;
     private String receiverCity;
-    private String currentStatus; // Kullanıcı dostu metin
+    private String currentStatus;
     private String currentStatusBadgeClass; // Bootstrap class
     private LocalDateTime lastUpdatedAt;
-    private boolean cancellable; // İptal edilebilir mi?
-    private boolean completable; // İlerletilebilir mi? (Aktif en az bir User Task var mı?)
+    private boolean cancellable;
+    private boolean completable;
 }

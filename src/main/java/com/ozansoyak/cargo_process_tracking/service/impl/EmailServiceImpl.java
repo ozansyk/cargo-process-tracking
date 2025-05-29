@@ -27,11 +27,6 @@ public class EmailServiceImpl implements EmailService {
     @Async
     @Override
     public void sendChangedCargoStatusToReceiver(String toEmail, String trackingNumber, CargoStatus newStatus, Cargo cargoDetails) {
-        if (toEmail == null || toEmail.isBlank()) {
-            log.warn("Alıcı e-posta adresi boş olduğu için durum güncelleme e-postası gönderilemedi. Takip No: {}", trackingNumber);
-            return;
-        }
-
         try {
             SimpleMailMessage message = new SimpleMailMessage();
             message.setFrom(emailFrom);
@@ -45,8 +40,6 @@ public class EmailServiceImpl implements EmailService {
 
             mailSender.send(message);
             log.info("{} takip numaralı kargonun yeni durumu ({}) hakkında e-posta başarıyla {} adresine gönderildi.", trackingNumber, newStatus, toEmail);
-        } catch (MailException e) {
-            log.error("{} takip numaralı kargo için durum güncelleme e-postası {} adresine gönderilirken hata oluştu: {}", trackingNumber, toEmail, e.getMessage(), e);
         } catch (Exception e) {
             log.error("{} takip numaralı kargo için durum güncelleme e-postası oluşturulurken/gönderilirken beklenmedik bir hata oluştu (Alıcı: {}): {}", trackingNumber, toEmail, e.getMessage(), e);
         }

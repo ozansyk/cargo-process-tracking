@@ -8,11 +8,10 @@ import org.springframework.web.bind.annotation.GetMapping;
 @Slf4j
 public class HomeController {
 
-    // --- DEĞİŞİKLİK: Kök URL'i /track'e yönlendir ---
     @GetMapping("/")
     public String home() {
         log.info("HomeController '/' endpoint called. Redirecting to /track.");
-        return "redirect:/track"; // "index" yerine yönlendirme yap
+        return "redirect:/track";
     }
 
 }

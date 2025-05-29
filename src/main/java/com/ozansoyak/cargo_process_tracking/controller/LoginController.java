@@ -17,12 +17,10 @@ public class LoginController {
                             Model model) {
 
         if (error != null) {
-            // URL'den gelen encode edilmiş mesajı decode et
             try {
                 String decodedError = URLDecoder.decode(error, StandardCharsets.UTF_8);
                 model.addAttribute("errorMessage", decodedError);
             } catch (Exception e) {
-                // Decode hatası olursa genel mesaj göster
                 model.addAttribute("errorMessage", "Geçersiz kullanıcı adı veya şifre.");
             }
         }
@@ -31,6 +29,6 @@ public class LoginController {
             model.addAttribute("logoutMessage", "Başarıyla çıkış yaptınız.");
         }
 
-        return "login"; // resources/templates/login.html
+        return "login";
     }
 }

@@ -10,7 +10,6 @@ import java.util.Collection;
 import java.util.Optional;
 
 @Repository
-// JpaSpecificationExecutor<Cargo> eklendi
 public interface CargoRepository extends JpaRepository<Cargo, Long>, JpaSpecificationExecutor<Cargo> {
 
     Optional<Cargo> findByTrackingNumber(String trackingNumber);

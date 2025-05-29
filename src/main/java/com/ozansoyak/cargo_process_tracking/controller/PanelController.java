@@ -51,8 +51,6 @@ public class PanelController {
         });
     }
 
-    // Bu metot PanelController içinde kalmalı veya bir utility sınıfına taşınmalı.
-    // DeploymentController'da kopyası vardı, eğer ortak bir utility'ye taşınırsa oradan çağrılabilir.
     public void addCommonPanelAttributes(Model model, Authentication authentication, String activeMenuItem) {
         String username = "Kullanıcı";
         String roles = "Bilinmiyor";
@@ -142,12 +140,10 @@ public class PanelController {
     }
 
     @GetMapping("/aktif-gorevler")
-    @PreAuthorize("hasRole('ADMIN')") // SADECE ADMIN TÜM GÖREVLERİ GÖRSÜN
+    @PreAuthorize("hasRole('ADMIN')")
     public String showActiveTasksPage(Model model, Authentication authentication) {
         addCommonPanelAttributes(model, authentication, "aktifGorevler");
 
-        // Tüm aktif görevleri getirmek için username ve userGroups'u null veya boş gönderiyoruz.
-        // CargoServiceImpl'deki getActiveUserTasks metodu bu durumu ele alacak şekilde güncellendi.
         List<ActiveTaskDto> activeTasks = cargoService.getActiveUserTasks(null, Collections.emptyList());
         model.addAttribute("activeTasks", activeTasks);
 

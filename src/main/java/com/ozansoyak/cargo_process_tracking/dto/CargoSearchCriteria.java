@@ -5,12 +5,11 @@ import org.springframework.format.annotation.DateTimeFormat; // Tarih formatı i
 
 import java.time.LocalDate;
 
-@Data // Getter, Setter, ToString, EqualsAndHashCode, RequiredArgsConstructor ekler
+@Data
 public class CargoSearchCriteria {
     private String trackingNo;
-    private String customerInfo; // Gönderici/Alıcı Adı veya Telefonu için tek alan
-    private String statusFilter; // Durum Enum'ının String hali (veya direkt Enum tipi)
-    @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) // HTML date input'tan gelen YYYY-MM-DD formatı için
-    private LocalDate date; // Şimdilik tek tarih, ileride başlangıç/bitiş olabilir
-    // Sayfalama bilgisi Controller'da Pageable ile yönetilecek
+    private String customerInfo;
+    private String statusFilter;
+    @DateTimeFormat(iso = DateTimeFormat.ISO.DATE)
+    private LocalDate date;
 }

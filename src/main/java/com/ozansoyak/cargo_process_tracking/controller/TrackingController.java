@@ -12,33 +12,22 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 
 @Controller
-@RequestMapping("/track") // Bu path'i kullanacağız
+@RequestMapping("/track")
 @RequiredArgsConstructor
 @Slf4j
 public class TrackingController {
 
     private final CargoService cargoService;
 
-    /**
-     * Takip sayfasını ilk açan veya sorgu parametresi olmadan gelen istekleri karşılar.
-     */
     @GetMapping
     public String showTrackingPage(Model model) {
-        // Başlangıçta model'e bir şey eklemeye gerek yok,
-        // sadece boş formu gösterelim.
-        // model.addAttribute("trackingInfo", null); // Thymeleaf null kontrolü yapacak zaten
-        // model.addAttribute("errorMessage", null);
-        return "track"; // resources/templates/track.html dosyasını döndürür
+        return "track";
     }
 
-    /**
-     * Takip numarası ile yapılan sorgu isteklerini karşılar.
-     * Örn: /track?trackingNumber=XYZ123
-     */
-    @GetMapping(params = "trackingNumber") // trackingNumber parametresi varsa bu metot çalışır
+    @GetMapping(params = "trackingNumber")
     public String trackCargoByNumber(@RequestParam String trackingNumber, Model model) {
         log.info("Kargo takip isteği alındı: {}", trackingNumber);
-        model.addAttribute("submittedTrackingNumber", trackingNumber); // Input'u tekrar doldurmak için
+        model.addAttribute("submittedTrackingNumber", trackingNumber);
 
         try {
             if (trackingNumber == null || trackingNumber.isBlank()) {
@@ -50,14 +39,12 @@ public class TrackingController {
             }
         } catch (EntityNotFoundException e) {
             log.warn("Takip numarası bulunamadı: {}", trackingNumber);
-            model.addAttribute("errorMessage", e.getMessage()); // Servisten gelen hata mesajını kullan
-            // model.addAttribute("trackingInfo", null); // Zaten null olacak
+            model.addAttribute("errorMessage", e.getMessage());
         } catch (Exception e) {
             log.error("Kargo takip sırasında beklenmedik hata oluştu (Takip No: {}): {}", trackingNumber, e.getMessage(), e);
             model.addAttribute("errorMessage", "Kargo bilgileri alınırken bir hata oluştu. Lütfen tekrar deneyin.");
-            // model.addAttribute("trackingInfo", null);
         }
 
-        return "track"; // Aynı sayfayı modeldeki verilerle tekrar döndürür
+        return "track";
     }
 }

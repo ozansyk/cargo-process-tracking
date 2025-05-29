@@ -11,6 +11,6 @@ import java.time.LocalDateTime;
 public class TrackingHistoryEvent {
     private LocalDateTime timestamp;
     private String statusDescription;
-    private String statusBadgeClass; // Badge class'ı içeriyor
+    private String statusBadgeClass;
     private String location;
 }

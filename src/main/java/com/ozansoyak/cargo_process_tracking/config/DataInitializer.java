@@ -19,15 +19,14 @@ public class DataInitializer implements CommandLineRunner {
     private final PasswordEncoder passwordEncoder;
 
     @Override
-    @Transactional // Eğer işlem sırasında hata olursa geri alınmasını sağlayabilir
+    @Transactional
     public void run(String... args) throws Exception {
-        // Başlangıçta admin kullanıcısı yoksa oluştur
-        String adminEmail = "ozan.soyak@hotmail.com"; // Veya admin@example.com gibi tam bir email
+        String adminEmail = "ozan.soyak@hotmail.com";
         if (userRepository.findByEmail(adminEmail).isEmpty()) {
             UserEntity adminUser = UserEntity.builder()
                     .email(adminEmail)
-                    .password(passwordEncoder.encode("123456")) // Şifreyi encode etmeyi unutma!
-                    .userType(UserType.ADMIN) // ADMIN rolünü ata
+                    .password(passwordEncoder.encode("123456"))
+                    .userType(UserType.ADMIN)
                     .isEnabled(true)
                     .build();
             userRepository.save(adminUser);
@@ -36,8 +35,6 @@ public class DataInitializer implements CommandLineRunner {
             log.info("Admin kullanıcısı zaten mevcut.");
         }
 
-        // İsterseniz burada başka başlangıç verileri de ekleyebilirsiniz.
-        // Örneğin, varsayılan bir personel kullanıcısı:
         /*
         String personnelEmail = "personel@example.com";
         if (!userRepository.findByEmail(personnelEmail).isPresent()) {
@@ -50,6 +47,6 @@ public class DataInitializer implements CommandLineRunner {
             userRepository.save(personnelUser);
             log.info("Başlangıç personel kullanıcısı oluşturuldu: {}", personnelEmail);
         }
-        */
+         */
     }
 }

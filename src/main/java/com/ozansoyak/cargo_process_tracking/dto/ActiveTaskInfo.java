@@ -11,7 +11,7 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 public class ActiveTaskInfo {
     private String taskDefinitionKey;
-    private String taskName; // Kullanıcı dostu görev adı
+    private String taskName;
     private boolean isCompletable; // Bu görev özelinde tamamlanabilirlik (genelde true olacak)
     private boolean requiresInput; // Fatura gibi özel input gerektiren görevler için flag
 }

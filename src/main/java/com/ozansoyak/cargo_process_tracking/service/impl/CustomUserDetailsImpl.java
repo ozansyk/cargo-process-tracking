@@ -15,7 +15,7 @@ public class CustomUserDetailsImpl implements UserDetails {
 
     @Override
     public Collection<? extends GrantedAuthority> getAuthorities() {
-        return null; // Rollerle çalışıyorsanız burada dönebilirsiniz
+        return null;
     }
 
     @Override
@@ -25,7 +25,7 @@ public class CustomUserDetailsImpl implements UserDetails {
 
     @Override
     public String getUsername() {
-        return user.getEmail(); // Buradan username dönecek
+        return user.getEmail();
     }
 
     @Override
@@ -49,6 +49,6 @@ public class CustomUserDetailsImpl implements UserDetails {
     }
 
     public String getEmail() {
-        return user.getEmail(); // Ek bilgiler döndürülebilir
+        return user.getEmail();
     }
 }

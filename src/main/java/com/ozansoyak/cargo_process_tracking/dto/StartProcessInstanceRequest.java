@@ -11,7 +11,5 @@ public class StartProcessInstanceRequest {
 
     private String businessKey; // Opsiyonel
 
-    // Başlangıç değişkenleri için basit bir Map
-    // Gerçekte bu daha karmaşık bir yapı olabilir (örn: JSON string veya özel DTO)
-    private Map<String, Object> variables;
+    private Map<String, Object> variables; //Opsiyonel
 }

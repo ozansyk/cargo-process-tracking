@@ -18,7 +18,7 @@ public class TrackingInfoResponse {
     private String senderCity;
     private String receiverCity;
     private String processInstanceId;
-    private List<TrackingHistoryEvent> historyEvents; // Bu DTO'nun tanımının sizde olduğunu varsayıyorum
+    private List<TrackingHistoryEvent> historyEvents;
 
     private String senderName;
     private String receiverName;
@@ -30,21 +30,13 @@ public class TrackingInfoResponse {
     private String dimensions;
     private String contentDescription;
 
-    // `completable` alanı kaldırıldı, yerine `activeUserTasks` listesi geldi.
-    // private boolean completable; // KALDIRILDI
-
     private boolean cancellable;
 
-    // --- YENİ ALAN: Aktif kullanıcı görevlerini tutacak liste ---
     private List<ActiveTaskInfo> activeUserTasks;
-    // --- `activeTaskDefinitionKey` ve `activeTaskName` KALDIRILDI ---
-    // private String activeTaskDefinitionKey;
-    // private String activeTaskName;
 
     private boolean found = true;
     private String errorMessage;
 
-    // Hata durumu için constructor
     public TrackingInfoResponse(boolean found, String errorMessage) {
         this.found = found;
         this.errorMessage = errorMessage;
