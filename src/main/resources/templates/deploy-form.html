@@ -6,14 +6,9 @@
       layout:decorate="~{layout/main-layout}">
 <head>
     <title layout:fragment="title">BPMN Yükle</title>
-    <!-- Bu sayfaya özel stil varsa buraya eklenebilir -->
     <th:block layout:fragment="pageStyles">
         <style>
-            /* deploy-form.html'e özel stiller (gerekirse) */
             .card {
-                /* main-layout.html'deki genel .card stilini kullanabilir
-                   veya burada özelleştirebilirsiniz.
-                   Örnek olarak, eğer layout'ta yoksa: */
                 box-shadow: 0 0.125rem 0.25rem rgba(0,0,0,.075);
             }
             .form-text {
@@ -48,8 +43,6 @@
 
     <div class="card">
         <div class="card-body">
-            <!-- Form action'ı DeploymentController'daki @PostMapping("/upload") ile eşleşmeli -->
-            <!-- Base path /panel/deployments olduğu için @{/panel/deployments/upload} olacak -->
             <form method="POST" enctype="multipart/form-data" th:action="@{/panel/deployments/upload}" class="needs-validation" novalidate>
                 <div class="mb-3">
                     <label for="deploymentName" class="form-label">Deployment Adı <span class="text-muted">(Opsiyonel, boş bırakılırsa dosya adı kullanılır)</span></label>

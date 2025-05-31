@@ -202,9 +202,9 @@
         const cargoForm = document.getElementById('newCargoForm');
         const loadingModalElement = document.getElementById('loadingModal');
         const loadingModal = loadingModalElement ? new bootstrap.Modal(loadingModalElement) : null;
-        const submitButton = document.getElementById('saveCargoButton'); // Butonu değişkene al
+        const submitButton = document.getElementById('saveCargoButton');
 
-        if (cargoForm && loadingModal && submitButton) { // submitButton kontrolü eklendi
+        if (cargoForm && loadingModal && submitButton) {
             cargoForm.addEventListener('submit', function(event) {
                 if (cargoForm.checkValidity()) {
                     console.log("Form geçerli, yükleniyor modalı gösteriliyor.");

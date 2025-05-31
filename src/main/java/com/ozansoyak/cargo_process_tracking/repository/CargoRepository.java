@@ -3,7 +3,7 @@ package com.ozansoyak.cargo_process_tracking.repository;
 import com.ozansoyak.cargo_process_tracking.model.Cargo;
 import com.ozansoyak.cargo_process_tracking.model.enums.CargoStatus;
 import org.springframework.data.jpa.repository.JpaRepository;
-import org.springframework.data.jpa.repository.JpaSpecificationExecutor; // Eklendi
+import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.stereotype.Repository;
 
 import java.util.Collection;

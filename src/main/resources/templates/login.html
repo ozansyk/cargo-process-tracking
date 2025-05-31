@@ -13,27 +13,25 @@
         }
 
         body {
-            display: flex; /* İçeriği dikeyde ortalamak için */
+            display: flex;
             align-items: center; /* Dikey ortalama */
-            justify-content: center; /* Yatay ortalama (text-center ile birlikte) */
+            justify-content: center;
             padding-top: 40px;
             padding-bottom: 40px;
             background-color: #f8f9fa;
         }
 
         .form-signin-wrapper {
-            /* Body flex yaptığı için, bu wrapper içeriği toparlar */
             width: 100%;
             max-width: 380px; /* Form genişliğini ayarla */
         }
 
         .form-signin {
-            /* Max-width wrapper'dan geliyor, burada sadece padding vb. */
             padding: 2rem;
             background-color: #fff;
             border-radius: 0.5rem;
             box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.1);
-            margin-bottom: 1.5rem; /* Altına boşluk */
+            margin-bottom: 1.5rem;
         }
 
         .form-signin .form-floating:focus-within {
@@ -50,33 +48,33 @@
 
         .alert {
             margin-top: 1rem;
-            margin-bottom: 1rem; /* Hata mesajı sonrası boşluk */
-            text-align: left; /* Hata mesajı sola dayalı olsun */
-            font-size: 0.9em; /* Biraz küçültelim */
+            margin-bottom: 1rem;
+            text-align: left;
+            font-size: 0.9em;
             padding: 0.75rem 1rem;
         }
 
         .track-link {
-            display: block; /* Tam satır kaplasın */
-            margin-top: 1rem; /* Butondan sonra boşluk */
-            padding: 0.5rem; /* Tıklama alanı */
+            display: block;
+            margin-top: 1rem;
+            padding: 0.5rem;
             font-size: 0.9em;
             color: #6c757d;
             text-decoration: none;
-            border-radius: 0.25rem; /* Hafif köşe yuvarlama */
+            border-radius: 0.25rem;
             transition: background-color 0.2s ease-in-out;
         }
 
         .track-link:hover {
             text-decoration: none;
-            background-color: #e9ecef; /* Üzerine gelince hafif arka plan */
+            background-color: #e9ecef;
             color: #0d6efd;
         }
 
         .footer-text {
             color: #6c757d;
             font-size: 0.9em;
-            margin-top: 2rem; /* Formdan sonra biraz boşluk */
+            margin-top: 2rem;
         }
     </style>
 </head>
@@ -91,13 +89,13 @@
 
             <!-- Hata Mesajı Alanı -->
             <div th:if="${errorMessage}" class="alert alert-danger d-flex align-items-center py-2" role="alert">
-                <i class="bi bi-exclamation-triangle-fill me-2"></i> <!-- İkon eklendi -->
+                <i class="bi bi-exclamation-triangle-fill me-2"></i>
                 <span th:text="${errorMessage}">Geçersiz kullanıcı adı veya şifre!</span>
             </div>
 
             <!-- Çıkış Mesajı Alanı -->
             <div th:if="${logoutMessage}" class="alert alert-success d-flex align-items-center py-2" role="alert">
-                <i class="bi bi-check-circle-fill me-2"></i> <!-- İkon eklendi -->
+                <i class="bi bi-check-circle-fill me-2"></i>
                 <span th:text="${logoutMessage}">Başarıyla çıkış yaptınız.</span>
             </div>
 
@@ -125,7 +123,7 @@
     <p class="footer-text">© 2025 Kargo Takip Sistemi</p>
     <p class="footer-text">Ozan SOYAK</p>
 
-</div> <!-- form-signin-wrapper sonu -->
+</div>
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
 </body>

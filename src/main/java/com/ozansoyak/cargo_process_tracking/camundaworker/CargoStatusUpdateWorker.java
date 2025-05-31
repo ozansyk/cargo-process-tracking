@@ -9,17 +9,16 @@ import lombok.extern.slf4j.Slf4j;
 import org.camunda.bpm.engine.delegate.BpmnError;
 import org.camunda.bpm.engine.delegate.DelegateExecution;
 import org.camunda.bpm.engine.delegate.JavaDelegate;
-// Camunda Model API importları
 import org.camunda.bpm.model.bpmn.instance.ExtensionElements;
-import org.camunda.bpm.model.bpmn.instance.ServiceTask; // ServiceTask olmalı
+import org.camunda.bpm.model.bpmn.instance.ServiceTask;
 import org.camunda.bpm.model.bpmn.instance.camunda.CamundaProperties;
 import org.camunda.bpm.model.bpmn.instance.camunda.CamundaProperty;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
-import java.util.Collection; // Eklendi/Kontrol edildi
-import java.util.List;      // Eklendi/Kontrol edildi
+import java.util.Collection;
+import java.util.List;
 import java.util.Optional;
 
 @Component("cargoStatusUpdater") // BPMN'deki delegateExpression ile aynı olmalı
@@ -32,10 +31,10 @@ public class CargoStatusUpdateWorker implements JavaDelegate {
     private static final String TARGET_STATUS_PROPERTY_NAME = "targetStatus"; // Extension Property adı
 
     @Override
-    @Transactional // Veritabanı işlemi olduğu için transactional olmalı
+    @Transactional
     public void execute(DelegateExecution execution) {
         String activityId = execution.getCurrentActivityId();
-        String activityName = execution.getCurrentActivityName(); // Loglama için daha açıklayıcı olabilir
+        String activityName = execution.getCurrentActivityName();
         String executionId = execution.getId();
         String processInstanceId = execution.getProcessInstanceId();
 
@@ -58,7 +57,7 @@ public class CargoStatusUpdateWorker implements JavaDelegate {
             // CamundaProperties listesini al
             List<CamundaProperties> propertiesList = extensionElements.getElementsQuery()
                     .filterByType(CamundaProperties.class)
-                    .list(); // list() kullanıldı
+                    .list();
 
             if (propertiesList.isEmpty()) {
                 log.error("[{}] Activity '{}' için <camunda:properties> bulunamadı.", executionId, activityId);
@@ -71,8 +70,8 @@ public class CargoStatusUpdateWorker implements JavaDelegate {
 
             // İlgili property'yi collection içinde ara
             Collection<CamundaProperty> propsCollection = camundaProperties.getCamundaProperties();
-            Optional<CamundaProperty> targetStatusProperty = propsCollection.stream() // stream() collection üzerinde çağrıldı
-                    .filter(prop -> TARGET_STATUS_PROPERTY_NAME.equals(prop.getCamundaName())) // getCamundaName doğru yerde
+            Optional<CamundaProperty> targetStatusProperty = propsCollection.stream()
+                    .filter(prop -> TARGET_STATUS_PROPERTY_NAME.equals(prop.getCamundaName()))
                     .findFirst();
 
             if (targetStatusProperty.isEmpty()) {
@@ -105,7 +104,7 @@ public class CargoStatusUpdateWorker implements JavaDelegate {
             // Farklı tipleri Long'a çevir
             if (cargoIdObj instanceof Long) {
                 cargoId = (Long) cargoIdObj;
-            } else if (cargoIdObj instanceof Number) { // Integer vs. olabilir
+            } else if (cargoIdObj instanceof Number) {
                 cargoId = ((Number) cargoIdObj).longValue();
             } else if (cargoIdObj instanceof String) {
                 try {
@@ -120,7 +119,7 @@ public class CargoStatusUpdateWorker implements JavaDelegate {
             }
 
             log.debug("[{}] Güncellenecek kargo ID: {}", executionId, cargoId);
-            final Long finalCargoId = cargoId; // Lambda için
+            final Long finalCargoId = cargoId;
 
             // 4. Veritabanından Kargoyu Bul
             Cargo cargo = cargoRepository.findById(finalCargoId)
@@ -136,7 +135,6 @@ public class CargoStatusUpdateWorker implements JavaDelegate {
             } else {
                 log.info("[{}] Kargo (ID: {}) durumu '{}' -> '{}' olarak güncelleniyor.", executionId, finalCargoId, cargo.getCurrentStatus(), targetStatus);
                 cargo.setCurrentStatus(targetStatus);
-                // ProcessInstanceId'yi de kontrol edip güncellemek iyi bir pratik olabilir
                 if (cargo.getProcessInstanceId() == null || !cargo.getProcessInstanceId().equals(processInstanceId)) {
                     log.warn("[{}] Cargo ID {} için ProcessInstanceId güncelleniyor. Eski: {}, Yeni: {}", executionId, finalCargoId, cargo.getProcessInstanceId(), processInstanceId);
                     cargo.setProcessInstanceId(processInstanceId);
@@ -156,16 +154,13 @@ public class CargoStatusUpdateWorker implements JavaDelegate {
             }
 
         } catch (BpmnError bpmnError) {
-            // Yakalanan BpmnError'ları logla ve tekrar fırlat (Camunda bunları yönetir)
             log.error("[{}] BPMN Hatası: Kod='{}', Mesaj='{}'", executionId, bpmnError.getErrorCode(), bpmnError.getMessage(), bpmnError);
             throw bpmnError;
         } catch (Exception e) {
-            // Diğer beklenmedik hataları (DB hatası vs.) logla ve genel bir BpmnError fırlat
             String cargoIdForLog = (cargoId != null) ? cargoId.toString() : "[Bilinmiyor]";
             String targetStatusForLog = (targetStatus != null) ? targetStatus.name() : "[Belirlenemedi]";
             log.error("[{}] Kargo durumu güncellenirken (hedef: {}, cargoId: {}) beklenmedik hata: {}",
                     executionId, targetStatusForLog, cargoIdForLog, e.getMessage(), e);
-            // Süreci durdurmak için BpmnError fırlat
             throw new BpmnError("WORKER_UNEXPECTED_ERROR", "Durum güncellenemedi: " + e.getMessage());
         }
     }

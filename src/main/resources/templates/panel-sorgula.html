@@ -8,7 +8,6 @@
     <title layout:fragment="title">Kargo Sorgula/Güncelle</title>
     <th:block layout:fragment="pageStyles">
         <style>
-            /* Genel Stil İyileştirmeleri */
             .table-sm th, .table-sm td { vertical-align: middle; padding: 0.5rem; }
             .badge { font-size: 0.85em; padding: 0.4em 0.65em; }
             .filter-card { background-color: #ffffff; box-shadow: 0 0.125rem 0.25rem rgba(0,0,0,.075); }
@@ -288,9 +287,7 @@
 
         window.fetchDetailsAndUpdateModal = function(trackingNumber) {
             if (!trackingNumber) return;
-            if(cancelCargoButton) cancelCargoButton.disabled = true; // API çağrısı sırasında iptal butonunu da kilitleyelim
-            // Aktif görev butonları populateModal içinde zaten temizlenip yeniden oluşturuluyor.
-            // Bu yüzden burada ayrıca disable etmeye gerek yok, fetch bitince populateModal onları doğru duruma getirecek.
+            if(cancelCargoButton) cancelCargoButton.disabled = true;
 
             fetch(`/api/cargos/details/${encodeURIComponent(trackingNumber)}`)
                 .then(window.handleFetchResponse)
@@ -303,19 +300,17 @@
                     console.error("Modal yenileme hatası:", error);
                     if(modalLoading) modalLoading.style.display = 'none';
                     if(modalContent) modalContent.style.display = 'none';
-                    if(activeTasksButtonsArea) activeTasksButtonsArea.innerHTML = ''; // Hata durumunda butonları temizle
-                    if(noActiveTasksMessage) noActiveTasksMessage.style.display = 'block'; // Hata durumunda mesajı göster
+                    if(activeTasksButtonsArea) activeTasksButtonsArea.innerHTML = '';
+                    if(noActiveTasksMessage) noActiveTasksMessage.style.display = 'block';
                     if(modalError) {
                         modalError.textContent = `Detaylar yenilenemedi: ${error.message || 'Bilinmeyen bir hata oluştu.'}`;
                         modalError.style.display = 'block';
                     }
-                    // Hata durumunda iptal butonunu da resetleyip kilitleyelim
                     if(cancelCargoButton) { window.resetButtonState(cancelCargoButton, 'Kargoyu İptal Et'); cancelCargoButton.disabled = true;}
                 });
         };
 
         window.populateModal = function(data) {
-            // console.log("populateModal çağrıldı. Gelen data:", JSON.parse(JSON.stringify(data)));
             if (!data) {
                 if(modalError) { modalError.textContent = 'Kargo bilgileri alınamadı.'; modalError.style.display = 'block'; }
                 return;
@@ -350,7 +345,7 @@
 
             if (activeTasksButtonsArea) activeTasksButtonsArea.innerHTML = '';
             if (invoiceEntryForm) invoiceEntryForm.style.display = 'none';
-            if (noActiveTasksMessage) noActiveTasksMessage.style.display = 'none'; // Başlangıçta mesajı gizle
+            if (noActiveTasksMessage) noActiveTasksMessage.style.display = 'none';
 
             let hasAnyButtonBeenAdded = false;
             if (data.activeUserTasks && data.activeUserTasks.length > 0) {
@@ -438,8 +433,7 @@
             const taskVariables = { invoiceNumber: invoiceNumber, invoiceAmount: invoiceAmount };
             fetch(`/api/cargos/${currentTrackingNumber}/complete-step/${taskKey}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(taskVariables) })
                 .then(window.handleFetchResponse)
-                .then(responseData => { // responseData artık TaskCompletionResponse
-                    // Dönen nesnedeki message alanını kullan
+                .then(responseData => {
                     let message = (responseData && responseData.message) ? responseData.message : 'Fatura oluşturuldu ve görev tamamlandı!';
                     if(updateResultArea) updateResultArea.innerHTML = `<div class="alert alert-success py-2 px-3">${message}</div>`;
                     window.hideInvoiceForm(); window.fetchDetailsAndUpdateModal(currentTrackingNumber);

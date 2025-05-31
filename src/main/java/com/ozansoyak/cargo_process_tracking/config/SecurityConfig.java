@@ -9,7 +9,7 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.config.annotation.authentication.builders.AuthenticationManagerBuilder;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
-import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity; // Bu anotasyon önemli
+import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -41,7 +41,7 @@ public class SecurityConfig {
                         .requestMatchers(
                                 "/", "/login", "/track**", "/error",
                                 "/images/**", "/css/**", "/js/**"
-                                ,"/api/cargos/**" // Test için açık, sonra kısıtla
+                                ,"/api/cargos/**"
                         ).permitAll()
                         .requestMatchers("/camunda/**", "/engine-rest/**", "/app/**").permitAll()
                         .requestMatchers("/panel/kullanici-yonetimi").hasRole("ADMIN")
